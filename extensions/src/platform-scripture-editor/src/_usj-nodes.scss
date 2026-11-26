@@ -6,6 +6,8 @@
    demo copy's d95907eed30 sync — the two vendored copies must not diverge on those rules).
    When re-syncing, see the "Indent compensation" comment in the gutter section below for the
    invariant usj-nodes-scss-coverage.test.ts enforces on this file and the demo copy.
+   The cut-run hover, table-row head piece, collapsed-note mark and verse-badge scoping rules come
+   from scripture-editors#26, unmerged when copied.
    The empty-verse caret rules (`.psc-empty-text-active`, `[data-caret-host]`) come from
    scripture-editors#34, unmerged when copied. Deliberately different from it: the ellipsis box
    (`--psc-empty-verse-ellipsis-width`) is the verse number size (`--psc-verse-number-size`, 13/16
@@ -2208,8 +2210,13 @@
 
 /* Hovering an attribute run lifts it out of its dim resting color to the host's ordinary text
    color. The literal is only the fallback for a host that defines no `--foreground`: a fixed
-   near-black would be all but invisible against a dark theme. */
-.attribute:hover {
+   near-black would be all but invisible against a dark theme. An annotation that holds part of a
+   run cuts it into sibling pieces, so the hover lifts every `.attribute` child of the hovered
+   piece's parent, when that parent is an owner holding one attribute run (a char span, an
+   attribute-run wrapper, an opaque block), so those are its pieces. A paragraph holds the runs of
+   every milestone in the Markers view, so a hover there lifts the hovered piece alone. */
+.attribute:hover,
+:is(.char, .attribute-run, .unknown-block):has(> .attribute:hover) > .attribute {
   color: var(--foreground, rgba(25, 25, 25, 1));
 }
 
@@ -2240,6 +2247,15 @@
 
 .note.collapsed .marker[data-lexical-decorator='true'],
 .note.collapsed span[data-lexical-text='true'] {
+  display: none;
+}
+
+/* A collapsed note shows only its caller, so a `<mark>` an annotation puts in its content holds no
+   visible text; any box an annotation style gives it (a border, padding, a margin) would draw a
+   sliver beside the caller. Everything such a mark holds is hidden already, so the mark is
+   hidden whole, which no box style can draw past. The caller is never a mark, so its own painting
+   is untouched. */
+.note.collapsed mark {
   display: none;
 }
 
@@ -2453,8 +2469,11 @@
   border-style: none;
 }
 
-.usfm .table-row > .opening,
-.usfm .table-row > .marker {
+/* The head piece only: a row glyph an annotation cuts into pieces (`data-piece-continuation` on
+   every piece after the first, displayAnnotations.index.ts) keeps the one gap the uncut glyph has,
+   in front of it, rather than one in front of every piece. */
+.usfm .table-row > .opening:not([data-piece-continuation]),
+.usfm .table-row > .marker:not([data-piece-continuation]) {
   padding-inline-start: 0.28em;
 }
 
@@ -2524,9 +2543,16 @@
 /* VerseNode, ImmutableVerseNode */
 
 .formatted-font .verse {
-  background-color: rgba(222, 222, 222, 1);
   vertical-align: super;
   font-size: 0.66em;
+}
+/* The grey badge is for the views whose verse is a read-only number (see the Standard view rule
+   below). Leaving the badge out of Standard view, rather than overriding it with a transparent
+   background there, leaves an annotation's own background free to paint a verse number it holds.
+   `:where` keeps the rule at the specificity of a plain `.formatted-font .verse`, so a view's own
+   verse rule (the gutter view's `background: none`) still outranks the badge. */
+.formatted-font:where(:not(.marker-editable)) .verse {
+  background-color: rgba(222, 222, 222, 1);
 }
 .text-spacing .verse {
   margin: 0px 2px 0px 2px;
@@ -2535,17 +2561,10 @@
   white-space: nowrap;
 }
 
-/* Standard view only. Ported from the library's packages/platform/src/usj-nodes.css, where it had
-   been missed in this vendored copy — the app therefore painted the badge in a view the library
-   does not, which is a real app-vs-demo difference at the one element the caret rests in here.
-   In standard view (`marker-editable`) a verse is a VerseNode, i.e. editable text whose content is
-   literally `\v 4 `, so the caret can and does come to rest INSIDE this span; the grey badge from
-   `.formatted-font .verse` above then sits directly behind that caret. PT9's Standard view has no
-   background badge on verse tokens (the formatted, non-editable views keep theirs). */
+/* Standard view: a verse is editable text (`\v 4 `) the caret can rest inside. */
 .formatted-font.marker-editable .verse {
   white-space: nowrap;
   unicode-bidi: embed;
-  background-color: transparent;
 }
 
 /* `.text-spacing .verse` above gives the verse token 2px of margin and 1px of padding on each side.

@@ -983,6 +983,39 @@ describe('EnhancedScripturePane', () => {
     expect(highlightSetAnnotationCalls).toHaveLength(0);
   });
 
+  it('rounds only the outer corners of a marble word the editor paints as several elements', async () => {
+    render(
+      <EnhancedScripturePane
+        usj={makeTestUsj(3)}
+        annotations={[
+          {
+            usjPath: '$.content[0].content[1]',
+            kind: 'word',
+            annotationId: 'wg-001',
+            metadata: {},
+          },
+        ]}
+        highlightAllResearchTerms
+        localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+      />,
+    );
+    await vi.waitFor(() => {
+      expect(overlayHasHighlightAllRule()).toBe(true);
+    });
+    // A radius on the base class would round every element's corners and notch the word where two
+    // of its elements meet.
+    expect(getOverlayCss()).not.toContain('border-radius');
+    const staticCss = Array.from(document.querySelectorAll('style'), (style) => style.textContent)
+      .join('\n')
+      .replace(/\s+/g, ' ');
+    expect(staticCss).toContain(
+      '.editor-typed-markStart-external-marble-word { border-start-start-radius: 2px; border-end-start-radius: 2px; }',
+    );
+    expect(staticCss).toContain(
+      '.editor-typed-markEnd-external-marble-word { border-start-end-radius: 2px; border-end-end-radius: 2px; }',
+    );
+  });
+
   it('does not re-run the annotation effect when re-rendered with the same props (no fake-dep churn)', async () => {
     const annotation: MarbleAnnotation = {
       usjPath: '$.content[0].content[1]',

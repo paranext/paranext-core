@@ -604,6 +604,18 @@ declare module 'platform-scripture-editor' {
    * extensions to define custom annotation styles while supporting theme variables.
    *
    * Supports CSS custom properties (e.g., `var(--primary)`) for theme-aware styling.
+   *
+   * An annotation can paint several elements — a verse number and the text after it, text on both
+   * sides of a character style's edge. `border`, `borderRadius`, `padding` and `margin` are drawn
+   * as one box across them whatever their value (a `var()`, three or four values, an elliptical
+   * radius, `!important`): every element gets the value as written, then loses the leading sides
+   * (and corners) unless it is the first element and the trailing sides unless it is the last. Each
+   * element's top and bottom follow its own font size and baseline, so over a raised, smaller verse
+   * number they sit inside the text's. An annotation that paints one element is drawn as the style
+   * reads. A view's own rule that outranks the annotation's class keeps its value: outside Standard
+   * view a verse number keeps its own padding and margin. Where annotations of two registered types
+   * paint one element, the element keeps a side that either annotation starts or ends on, and shows
+   * the values of the type registered later.
    */
   export type AnnotationStyleProperties = {
     /**
@@ -618,7 +630,9 @@ declare module 'platform-scripture-editor' {
     backgroundColor?: string;
 
     /**
-     * Border style.
+     * Border style. Drawn as one box around everything an annotation paints: the top and bottom
+     * border on every element, the leading border on the first and the trailing border on the
+     * last.
      *
      * @example '1px solid red'
      *
@@ -627,7 +641,8 @@ declare module 'platform-scripture-editor' {
     border?: string;
 
     /**
-     * Border radius for rounded corners.
+     * Border radius for rounded corners. Only the outer corners of everything an annotation paints
+     * stay rounded: the leading corners of its first element and the trailing corners of its last.
      *
      * @example '4px'
      *
@@ -676,7 +691,8 @@ declare module 'platform-scripture-editor' {
     fontWeight?: string | number;
 
     /**
-     * Margin.
+     * Margin. The top and bottom apply to every element an annotation paints and the horizontal
+     * parts only before its first element and after its last.
      *
      * @example '2px'
      *
@@ -694,7 +710,8 @@ declare module 'platform-scripture-editor' {
     opacity?: string | number;
 
     /**
-     * Padding.
+     * Padding. The top and bottom apply to every element an annotation paints and the horizontal
+     * parts only inside the leading side of its first element and the trailing side of its last.
      *
      * @example '2px'
      *
