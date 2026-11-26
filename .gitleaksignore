@@ -1,0 +1,4 @@
+# False positives in the minified App Shell Storybook build (.context/references/app-shell/):
+# the generic-api-key rule matches minified variables named "key" (He.key, wn.focus.key), not credentials.
+.context/references/app-shell/app-shell-storybook.html:generic-api-key:49359
+.context/references/app-shell/app-shell-storybook.html:generic-api-key:49538
