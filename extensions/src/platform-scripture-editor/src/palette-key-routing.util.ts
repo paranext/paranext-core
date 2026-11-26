@@ -1,3 +1,6 @@
+import type { MarkerMode } from '@eten-tech-foundation/platform-editor';
+import { refusesTypedMarkerTrigger } from 'platform-bible-react/experimental';
+
 /**
  * Decides whether a Standard-view keydown should be routed into the marker-palette session's key
  * table (`handleMarkerPaletteSessionKeyDown`) rather than left to the editor.
@@ -41,9 +44,11 @@ export const INLINE_MARKERS_MENU_TRIGGER = '\\';
  * Decides whether a keydown should open the inline marker menu. The twin of
  * `shouldRoutePaletteKey`: Standard view has the marker palette, every other view has this menu.
  *
- * The menu's items insert markers, which a read-only editor refuses, so it never opens there. It
- * opens only for a keystroke aimed at the main editor (focused), and not again while it is already
- * showing.
+ * The menu's items insert markers, which a read-only editor refuses, so it never opens there. Nor
+ * does it open while the next chapter loads: the key is left to `usePauseEditing`, which holds it
+ * off, because a pick made after the load would land in the new chapter at the old chapter's
+ * position. It opens only for a keystroke aimed at the main editor (focused), and not again while
+ * it is already showing.
  */
 export function shouldOpenInlineMarkersMenu(options: {
   /** The key that was pressed. */
@@ -54,15 +59,34 @@ export function shouldOpenInlineMarkersMenu(options: {
   isEditorFocused: boolean;
   /** Whether the project or view is effectively read-only. */
   isReadOnly: boolean;
+  /** Whether the next chapter is loading into the editor. */
+  isChapterLoading: boolean;
   /** The editor's current view; Standard view uses the palette instead of this menu. */
   viewType: string;
 }): boolean {
-  const { key, isMenuShown, isEditorFocused, isReadOnly, viewType } = options;
+  const { key, isMenuShown, isEditorFocused, isReadOnly, isChapterLoading, viewType } = options;
   return (
     !isMenuShown &&
     isEditorFocused &&
     !isReadOnly &&
+    !isChapterLoading &&
     viewType !== 'standard' &&
     key === INLINE_MARKERS_MENU_TRIGGER
   );
+}
+
+/**
+ * Decides whether the CAPTURE-phase keydown listener takes the inline-menu trigger for itself,
+ * ahead of the editor, rather than leaving the bubble-phase listener to open the menu.
+ *
+ * Only a view whose editor refuses a typed `\` needs this (`refusesTypedMarkerTrigger`, which says
+ * why). Views that show markers raise no such notice, so they keep the bubble-phase path.
+ */
+export function shouldClaimInlineMarkersMenuTrigger(
+  options: Parameters<typeof shouldOpenInlineMarkersMenu>[0] & {
+    /** The editor's `markerMode` view option. */
+    markerMode: MarkerMode | undefined;
+  },
+): boolean {
+  return refusesTypedMarkerTrigger(options.markerMode) && shouldOpenInlineMarkersMenu(options);
 }

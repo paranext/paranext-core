@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   INLINE_MARKERS_MENU_TRIGGER,
+  shouldClaimInlineMarkersMenuTrigger,
   shouldOpenInlineMarkersMenu,
   shouldRoutePaletteKey,
 } from './palette-key-routing.util';
@@ -58,6 +59,7 @@ describe('shouldOpenInlineMarkersMenu', () => {
     isMenuShown: false,
     isEditorFocused: true,
     isReadOnly: false,
+    isChapterLoading: false,
     viewType: 'formatted',
   };
 
@@ -82,7 +84,65 @@ describe('shouldOpenInlineMarkersMenu', () => {
     expect(shouldOpenInlineMarkersMenu({ ...menuBase, isReadOnly: true })).toBe(false);
   });
 
+  it('does not open while the next chapter loads', () => {
+    // A pick made after the load would land in the new chapter at the old chapter's position.
+    expect(shouldOpenInlineMarkersMenu({ ...menuBase, isChapterLoading: true })).toBe(false);
+  });
+
   it('does not open in Standard view, which has the palette instead', () => {
     expect(shouldOpenInlineMarkersMenu({ ...menuBase, viewType: 'standard' })).toBe(false);
+  });
+});
+
+describe('shouldClaimInlineMarkersMenuTrigger', () => {
+  const claimBase: Parameters<typeof shouldClaimInlineMarkersMenuTrigger>[0] = {
+    key: INLINE_MARKERS_MENU_TRIGGER,
+    isMenuShown: false,
+    isEditorFocused: true,
+    isReadOnly: false,
+    isChapterLoading: false,
+    viewType: 'formatted',
+    markerMode: 'hidden',
+  };
+
+  it('claims the trigger in a hidden-marker view where the menu would open', () => {
+    // The editor in a hidden-marker view refuses a typed `\` with a "can't be typed" notice. The
+    // key has to be taken before the editor sees it, or the menu opens AND the notice shows.
+    expect(shouldClaimInlineMarkersMenuTrigger({ ...claimBase })).toBe(true);
+  });
+
+  it('leaves the trigger alone in views that show markers', () => {
+    // Those views keep opening the menu from the bubble-phase listener; their editor raises no
+    // notice for the key.
+    expect(shouldClaimInlineMarkersMenuTrigger({ ...claimBase, markerMode: 'visible' })).toBe(
+      false,
+    );
+    expect(shouldClaimInlineMarkersMenuTrigger({ ...claimBase, markerMode: 'editable' })).toBe(
+      false,
+    );
+    expect(shouldClaimInlineMarkersMenuTrigger({ ...claimBase, markerMode: undefined })).toBe(
+      false,
+    );
+  });
+
+  it('does not claim where the menu would not open, so the editor still refuses the key', () => {
+    expect(shouldClaimInlineMarkersMenuTrigger({ ...claimBase, key: '/' })).toBe(false);
+    expect(shouldClaimInlineMarkersMenuTrigger({ ...claimBase, isMenuShown: true })).toBe(false);
+    expect(shouldClaimInlineMarkersMenuTrigger({ ...claimBase, isEditorFocused: false })).toBe(
+      false,
+    );
+    expect(shouldClaimInlineMarkersMenuTrigger({ ...claimBase, isReadOnly: true })).toBe(false);
+  });
+
+  it('does not claim while the next chapter loads, leaving the key to `usePauseEditing`', () => {
+    // This listener runs on `window` in the capture phase, ahead of the hook's listener, so a
+    // claim here would stop the hook ever holding the key off.
+    expect(shouldClaimInlineMarkersMenuTrigger({ ...claimBase, isChapterLoading: true })).toBe(
+      false,
+    );
+  });
+
+  it('never claims in Standard view, whose palette owns the key', () => {
+    expect(shouldClaimInlineMarkersMenuTrigger({ ...claimBase, viewType: 'standard' })).toBe(false);
   });
 });

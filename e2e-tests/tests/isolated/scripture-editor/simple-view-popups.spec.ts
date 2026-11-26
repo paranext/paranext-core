@@ -4,10 +4,12 @@
  * no such view: Standard view opens the platform's command palette on `\`, and its formatted
  * rendering is the read-only Preview, where `\` opens nothing.
  *
- * - With the editor's right-click menu open, the menu's own document-capture listener claims `\`
- *   before it can reach the web view's guard (`isEditorContextMenuOpen` inside `handleKeyDown`), so
- *   no inline marker menu opens over it. A positive control (the same key with the menu closed)
- *   shows the check is falsifiable.
+ * - With the editor's right-click menu open, `\` is swallowed (`isEditorContextMenuOpen`), so no
+ *   inline marker menu opens over it. A positive control (the same key with the menu closed) shows
+ *   the check is falsifiable.
+ * - Neither `\` raises the view's "\ and // can't be typed" notice: the web view's capture-phase
+ *   listener takes the key before the editor can refuse it. A positive control (`//` typed into the
+ *   text, which the editor does refuse) shows the toast probe sees that notice.
  * - The inline marker menu stays at interface scale and beside the text it was opened on while the
  *   text is zoomed and scrolled.
  *
@@ -34,6 +36,11 @@ import {
   openEditableScriptureEditorForProject,
   SAMPLE_WEB_PROJECT_ID,
 } from '../../../fixtures/scripture-editor-helpers';
+import {
+  clearRecordedToasts,
+  installToastProbe,
+  recordedToasts,
+} from '../../../fixtures/toast-recorder';
 
 /**
  * Budget for the double-rAF settle wait below, mirroring `WINDOW_WIDTH_RAF_SETTLE_TIMEOUT_MS` in
@@ -43,6 +50,15 @@ import {
  * end it.
  */
 const RAF_SETTLE_TIMEOUT_MS = 2_000;
+
+/** The notice a hidden-marker view raises when it refuses a typed `\` or `//`. */
+const TYPING_REFUSED_MESSAGE = "\\ and // can't be typed in this view.";
+
+/**
+ * How long a refused keystroke's notice may take to show. The checks that no notice appeared wait
+ * this long, and the positive control at the end of the step proves a real one shows within it.
+ */
+const TYPING_NOTICE_SETTLE_MS = 5_000;
 
 // DEV_NOISY=false: the noisy dev test layout replaces the normal layouts (see
 // scroll-group-sync.spec.ts).
@@ -78,6 +94,7 @@ test.describe('scripture editor pop-ups in the Simple-mode view', () => {
     // The view every step below depends on: Simple mode's formatted view (`marker-hidden`), not
     // Standard view (`marker-editable`), whose `\` opens the platform's command palette instead.
     await expect(mainInput).toHaveClass(/\bmarker-hidden\b/, { timeout: 20_000 });
+    await installToastProbe(mainPage);
 
     await test.step('the backslash does not open the inline markers menu while the context menu is open', async () => {
       const contextMenu = editorFrame.locator('.typeahead-popover.auto-embed-menu');
@@ -115,6 +132,7 @@ test.describe('scripture editor pop-ups in the Simple-mode view', () => {
         w.strayMarkerMenuObserver = observer;
       });
 
+      await clearRecordedToasts(mainPage);
       await mainPage.keyboard.press('\\');
 
       // The open is a synchronous React state update from a discrete keydown handler, so it has
@@ -163,6 +181,26 @@ test.describe('scripture editor pop-ups in the Simple-mode view', () => {
       await expect(markerMenuSearch).toBeVisible({ timeout: 15_000 });
       await mainPage.keyboard.press('Escape');
       await expect(markerMenuSearch).not.toBeVisible({ timeout: 15_000 });
+
+      // Both `\` presses above were spent on a menu, swallowed or opened, so the view must not also
+      // say the key can't be typed.
+      await sleep(TYPING_NOTICE_SETTLE_MS);
+      expect(
+        await recordedToasts(mainPage),
+        'a `\\` spent on a menu should not raise the "can\'t be typed" notice',
+      ).not.toEqual(expect.arrayContaining([expect.stringContaining(TYPING_REFUSED_MESSAGE)]));
+
+      // Positive control: the editor does refuse a typed `//` with that notice, and it shows within
+      // the time waited above. The first `/` goes in and is taken back out.
+      await mainPage.keyboard.press('/');
+      await mainPage.keyboard.press('/');
+      await expect
+        .poll(() => recordedToasts(mainPage), {
+          message: 'a typed `//` should raise the "can\'t be typed" notice',
+          timeout: TYPING_NOTICE_SETTLE_MS,
+        })
+        .toEqual(expect.arrayContaining([expect.stringContaining(TYPING_REFUSED_MESSAGE)]));
+      await mainPage.keyboard.press('Backspace');
     });
 
     await test.step('the inline marker menu stays at interface scale and follows the text', async () => {

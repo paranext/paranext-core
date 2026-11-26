@@ -257,8 +257,8 @@ describe('_usj-nodes.scss vendored editor stylesheet', () => {
     // different upstream commits, and nothing structural keeps their rule sets in agreement —
     // with each suite asserting only its own copy's rules, a fix (the RTL/bidi gutter isolation,
     // the ::after outline) can land in one copy and silently miss the other. The demo suite
-    // carries the same three pins, so a fix landing in one copy fails the other's suite until it
-    // is forwarded. The gutter indent-compensation block is covered structurally instead:
+    // carries the same pins, so a fix landing in one copy fails the other's suite until it is
+    // forwarded. The gutter indent-compensation block is covered structurally instead:
     // usj-nodes-scss-coverage.test.ts derives it from each copy's base rules and compares the two
     // copies' results, so no pin is needed for it here.
     it('isolates gutter marker text as LTR (RTL glyph-offset fix)', () => {
@@ -279,6 +279,12 @@ describe('_usj-nodes.scss vendored editor stylesheet', () => {
       expect(code).toMatch(
         /(?:^|\})\s*\.usfm,\s*\[data-footnotes-pane\]\s*\{\s*--usj-font-fallback:/,
       );
+    });
+    // `text-indent` is inherited, and a block box applies it to its own first line. A box inside a
+    // `\q` paragraph (`text-indent: -10vw`) would otherwise draw its opening `\fig` glyph out past
+    // its left edge, and one inside an indented paragraph would leave a gap before the glyph.
+    it("keeps the UnknownNode block box from inheriting its paragraph's first-line indent", () => {
+      expect(scss).toMatch(rule(['.marker-editable .unknown-block'], 'text-indent: 0;'));
     });
     describe('Simple-mode text sizes follow the project font size', () => {
       const code = scss.replace(/\/\*[\s\S]*?\*\//g, '');

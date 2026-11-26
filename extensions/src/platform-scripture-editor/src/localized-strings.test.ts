@@ -17,6 +17,7 @@ import { VIEW_OPTIONS_NOTICE_STRING_KEYS } from './scripture-text-grid/view-opti
 import { TEAM_LAYOUT_BUTTON_STRING_KEYS } from './team-layout-button.component';
 import { STRUCTURE_PROTECTION_BUTTON_STRING_KEYS } from './structure-protection-button.component';
 import { HIDDEN_CONTENT_DELETE_STRING_KEYS } from './hidden-content-delete-confirm.utils';
+import { UNSTORABLE_TEXT_NOTICE_STRING_KEYS } from './unstorable-text-notice.utils';
 import { TWO_STEP_DELETE_MESSAGE_STRING_KEYS } from './two-step-delete-tooltip/two-step-delete-tooltip.utils';
 import {
   paragraphMarkerNameKey,
@@ -504,13 +505,17 @@ describe.each([...EMPTY_CHAPTER_VIEW_STRING_KEYS])('empty chapter view label %s'
   });
 });
 
-// The two notices a refused save can raise: one saying the editor's chapter marker disagreed with
-// the chapter it belongs to and was put back, one saying the backend refused the save for a reason
-// the editor cannot name. Both are ordinary user-facing toasts, so both carry the `es` parity every
-// other notification key in this file has — the `%versionHistoryCommit_*%` keys are en-only because
-// they are commit messages rather than UI text, which is not a precedent these can borrow.
+// The notices about saves: one saying the editor's chapter marker disagreed with the chapter it
+// belongs to and was put back, two saying the user's latest typing was lost (to leaving or closing
+// the chapter, or to a change made outside the editor), and one saying the backend refused the
+// save for a reason the editor cannot name. All are ordinary user-facing toasts, so all carry the
+// `es` parity every other notification key in this file has — the `%versionHistoryCommit_*%` keys
+// are en-only because they are commit messages rather than UI text, which is not a precedent these
+// can borrow.
 const SAVE_NOTIFICATION_KEYS = [
   '%webView_platformScriptureEditor_error_chapterMarkerCorrected_format%',
+  '%webView_platformScriptureEditor_error_editsLost_format%',
+  '%webView_platformScriptureEditor_error_editsReplacedByUpdate_format%',
   '%webView_platformScriptureEditor_error_saveFailed_format%',
 ];
 
@@ -597,6 +602,19 @@ describe.each(['en', 'es'])('chapter marker correction notification in %s', (loc
   });
 });
 
+// The notices that typing was lost name the chapter it was typed in, which is often not the one on
+// screen: the user has usually just moved to another chapter.
+describe.each([
+  ['en', '%webView_platformScriptureEditor_error_editsLost_format%'],
+  ['es', '%webView_platformScriptureEditor_error_editsLost_format%'],
+  ['en', '%webView_platformScriptureEditor_error_editsReplacedByUpdate_format%'],
+  ['es', '%webView_platformScriptureEditor_error_editsReplacedByUpdate_format%'],
+])('lost edits notification in %s: %s', (locale, key) => {
+  it.each(['{projectName}', '{book}', '{chapter}'])('keeps the %s slot', (placeholder) => {
+    expect(localizedStrings[locale][key]).toContain(placeholder);
+  });
+});
+
 // The generic save-failure notice has to say which project stopped saving, so the {projectName}
 // slot must survive any later edit to the string, and it must not leak the backend's own wording —
 // that stays in the log.
@@ -645,6 +663,21 @@ describe.each([...STRUCTURE_PROTECTION_BUTTON_STRING_KEYS])(
 // The confirmation shown before an edit removes content the view does not show: its title, prompt,
 // and buttons.
 describe.each([...HIDDEN_CONTENT_DELETE_STRING_KEYS])('hidden content delete label %s', (key) => {
+  it('has an English label', () => {
+    expect(localizedStrings.en[key]).toBeTruthy();
+  });
+
+  it('has a Spanish label', () => {
+    expect(localizedStrings.es[key]).toBeTruthy();
+  });
+
+  it('Spanish label differs from English', () => {
+    expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
+  });
+});
+
+// The notice shown when the editor removes `\` or `//`, or refuses an edit that would create one.
+describe.each([...UNSTORABLE_TEXT_NOTICE_STRING_KEYS])('unstorable text notice %s', (key) => {
   it('has an English label', () => {
     expect(localizedStrings.en[key]).toBeTruthy();
   });

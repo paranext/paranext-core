@@ -88,6 +88,7 @@ export {
   getMarkerPaletteClaimedKeys,
   resolveFilterCharacter,
   handleMarkerPaletteSessionKeyDown,
+  refusesTypedMarkerTrigger,
   type MarkerPaletteKeyEvent,
   type MarkerPaletteKeyOutcome,
   type MarkerPaletteSessionDriver,

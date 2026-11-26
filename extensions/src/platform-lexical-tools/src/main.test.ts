@@ -67,7 +67,10 @@ vi.mock('@papi/backend', () => ({
       }),
     },
     localization: { getLocalizedString: vi.fn(async () => 'Dictionary: SDBH/SDBG') },
-    settings: { get: vi.fn(async () => 'simple') },
+    settings: {
+      get: vi.fn(async () => 'simple'),
+      registerValidator: vi.fn(async () => ({ dispose: vi.fn() })),
+    },
   },
   logger: { debug: vi.fn(), warn: vi.fn(), info: vi.fn(), error: vi.fn() },
   DataProviderEngine: mocks.PapiBackendStubBase,

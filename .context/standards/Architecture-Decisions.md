@@ -3231,6 +3231,69 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** PT-4370 round 9; paranext-core PR #2823, scripture-editors PR
   paranext/scripture-editors#11.
 
+## adr-editor-clipboard-format-in-html-attribute: A hidden-marker view's clipboard format travels in an attribute of the copy's html
+
+- **Date:** 2026-10-30
+- **Status:** Accepted (short term). Long-term direction: USFM on the clipboard, read back with
+  Standard view's tokenizer, so one format serves every view and other programs (PT-4984).
+- **Context:** A view that hides its markers cannot paste what it copied from the copy's text or
+  its html: Lexical's html export carries no char or note attributes, milestones or figures, so a
+  pasted footnote gained closers (catalog row CB-3). The editor's own node copy does hold all of it,
+  but the editor's Ctrl+V and menu Paste start from `navigator.clipboard.read()`, which returns only
+  sanctioned types and drops `application/x-lexical-editor`. The `data-*` attributes of the html do
+  come through that read.
+- **Decision:** The editor writes the node copy into an attribute of the copy's html
+  (`data-platform-editor-node-copy`, on one inline `<span>` around the export) as well as into
+  `application/x-lexical-editor`, and reads it back through today's async read. The mechanics are in
+  `scripture-editors`' `docs/clipboard-semantics.md`, S5. A copy from a view that shows markers
+  carries a second attribute, `data-platform-editor-marker-text`, and a paste into a hidden-marker
+  view strips marker tokens from html carrying it, without a notice. The host has no part in it:
+  paranext-core has no clipboard command.
+- **Alternatives considered:**
+  - _A host command running a native paste (`webContents.paste()`), whose `paste` event carries the
+    flavor._ PAPI commands are reachable over the unauthenticated WebSocket on 8876, so a web page
+    in the user's browser could paste the clipboard (a password just copied) into a focused editor,
+    where it is saved and can be read back. Refusing connections with an `Origin` is a header
+    stopgap, and does not stop such a page sending a notification whose click command the renderer
+    then runs for it. The paste also lands wherever focus is, which needs a focus workaround in the
+    menu component.
+  - _A web custom format (`web application/x-lexical-editor`, through
+    `navigator.clipboard.write`)._ It survives the read, but cannot be written in the copy event, so
+    it needs an async second write: rejected when the document is not focused, broken by concurrent
+    writes on Linux, and unseen by a native paste such as the macOS app menu's.
+  - _Carrying everything in the html's own elements._ Rewrites Lexical's export and import for every
+    node type, and other programs' html still would not have it.
+- **Consequences:**
+  - No main-process surface, and no focus requirement beyond the document having focus, which the
+    read needs anyway.
+  - The attribute holds what the view hides (a figure's caption, a collapsed note's text) and about
+    doubles the html, so any program reading attributes can see those; TJ accepted this
+    (2026-10-30). Any program can also write the attribute, which goes through the same guarded parse
+    as the flavor; TJ does not mind forged data (2026-10-30).
+  - Any program can likewise write `data-platform-editor-marker-text`, and html carrying it has its
+    marker tokens stripped on paste with no notice (catalog CB-14).
+  - A pasted node copy is accepted only when every node in it is of a type a hidden-marker view's
+    document holds; otherwise the paste falls back to the html.
+  - A copy that goes through another editor loses the attribute and pastes as html (catalog row
+    CB-14; open work on PT-4984).
+  - The read raises no `paste` event, so during a chapter load `usePauseEditing` holds off the paste
+    chords by key (and the cut chord, which raises no `cut` event), and the Edit flyout's Paste is
+    refused by the web view's read-only check. The right-click menu runs its Paste and Cut as editor
+    commands, with no event to hold off, so `usePauseEditing` holds off `contextmenu` instead and the
+    menu does not open during the load. A menu already open when the load begins still runs its
+    items; what they do is not saved, and cut text returns when the new chapter loads.
+  - The hold-off starts after the chapter's last save. The chapter-switch flush runs in the commit
+    that changes the chapter selector, the loading flag is set in an effect after it, and
+    `usePauseEditing` attaches its listeners a commit later. A paste or keystroke in that gap, or a
+    clipboard read landing after the flush, is not held off and is not saved
+    (`isEditorContentForChapter` refuses it): it shows in the chapter being left until the new one
+    replaces it. A read started in that gap can also outlast a short load, and then lands in the new
+    chapter and is saved there (seen in `in-editor-paste.spec.ts`). TJ chose to leave this window
+    as it is (2026-10-30): it only affects an edit made after asking to leave the chapter.
+  - Checked on Electron 39 on Linux and on Windows (probes), and end to end on Linux by
+    `in-editor-paste.spec.ts`. macOS was researched, not run.
+- **Source:** PT-4921; paranext-core#2976, paranext/scripture-editors#43.
+
 ## adr-editor-collapsed-note-hides-its-annotations: An annotation inside a collapsed note is not shown, as in Paratext 9
 
 - **Date:** 2026-10-01
@@ -3264,6 +3327,38 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   by `.claude/agents/pt10-reuse-scout.md`. Deleting it rather than marking it superseded is the
   carve-out described under "Don't rewrite history" above. Git history keeps the text.
 - **What covers this ground instead:** `adr-pop-ups-stay-at-interface-scale`.
+
+## adr-editor-control-characters-entered-as-spaces: Every view takes an entered C0 control character in as a space, and the editors keep U+001A and U+000B for themselves
+
+- **Date:** 2026-11-11
+- **Status:** Accepted (TJ, 2026-11-11: "use U+000B and we don't lose U+2028").
+- **Context:** Standard view's marker settle rebuilds a paragraph from its text. It wrote the
+  display-only line break (shown before a verse in a view without spacing) as U+2028, then stripped
+  every U+2028 before tokenizing, so a real U+2028 was lost (catalog T-19). The
+  break needs a character that JavaScript's `\s` reads as whitespace, so the positions either side
+  of it stay apart, and that no text can hold. Only Standard view turned entered control characters
+  into spaces (for its U+001A stand-in, `adr-editor-nbsp-spelling-follows-project-setting`), and
+  not U+0000.
+- **Decision:** The settle spells the display-only break as U+000B (vertical tab). Every view takes
+  each C0 control character but tab, LF and CR that the user types, pastes or drops in as a space —
+  plain text, html and a node copy alike — through the rule that drops an entered U+FEFF
+  (`InvisibleCharactersPlugin`, `normalizeEnteredText`; catalog EV-6). ParatextData reads every such
+  character as a space (`ScrText.ProcessBookOrChapterText`, pinned by
+  `ControlCharacterReadCaptureTests.cs`), so no loaded text holds one, and so the editors can keep
+  U+001A (Standard view's no-break-space stand-in) and U+000B for their own use. If a ParatextData
+  upgrade turns that test red, a stored U+000B would reach the editor and its settle would drop it. Text a document already holds is never changed on input; a load keeps its own rules.
+- **Alternatives:** **Keep U+2028 and escape a real one in the settle's text** — rejected: every
+  reader of that text that counts positions would have to know the escape. **A noncharacter or
+  private-use code point** — not whitespace to `\s`, so the caret positions either side of the
+  break would collapse; private use also occurs in some projects' text. **Drop an entered control
+  character instead of making it a space** — rejected: it would join the text either side, and the
+  user wrote something there.
+- **Consequences:** A new internal use of a control character can rely on no entered or loaded
+  text holding one, but must say so beside it and name the rule. A library host that loads USJ
+  holding a control character into a view other than Standard (Paratext's reader never gives it
+  one) keeps it until a settle in the Unformatted view (library only), which removes a U+000B. Applied delta ops
+  are not filtered outside Standard view: they carry what another editor already took in through
+  the same rule.
 
 ## adr-editor-edit-side-effects-shared-module: Editor edit side effects (version-history snapshot, sync-blocked notice) live in one shared module
 
@@ -3322,9 +3417,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `NBSP_STAND_IN`, U+001A (SUBSTITUTE) — in its tree, in the settle's USFM fragments, in paste and
   for a typed U+00A0 — and `~` is an ordinary character. One helper in the editor
   (`getNbspSpelling`) supplies the spelling to every layer.
-  - **Why U+001A:** ParatextData's `ScrText.GetText` turns U+0001–U+0008 and U+000E–U+001F into
-    spaces on every read (measured), so no project text can hold it and the stand-in collides with
-    nothing. Bidi class BN, line-break class CM (no break before it), one grapheme. Not U+0000 (the
+  - **Why U+001A:** ParatextData's `ScrText.GetText` turns every C0 control character but tab, LF
+    and CR into a space on every read, U+000B and U+000C included (`ScrText.ProcessBookOrChapterText`,
+    pinned by `ControlCharacterReadCaptureTests.cs`), so no project text can hold it and the
+    stand-in collides with nothing. Bidi class BN, line-break class CM (no break before it), one grapheme. Not U+0000 (the
     editor's settle-scope signature separator), U+000B/U+000C (whitespace to JavaScript) or
     U+001C–U+001F (bidi separators).
   - **It looks like a no-break space:** a one-glyph font family, `PlatformEditorNbspStandIn` (an
@@ -3512,6 +3608,55 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   documents is `insertCommentAtCurrentSelection` in
   `extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx`.
 
+## adr-editor-unsaved-edits-lose-to-unclaimed-updates: Without a claim on the chapter, an incoming chapter wins over the editor's unsaved edits, and the user is told
+
+- **Date:** 2026-11-06
+- **Status:** Accepted
+- **Context:** The Scripture editor claims its chapter while the user is actively editing it (see
+  `adr-editor-yields-to-window-focus-subject`); a differing incoming chapter is then held back and
+  the editor's copy is pushed over it. Without the claim, the incoming chapter replaces the editor.
+  But edits the editor had not saved yet were treated two ways: a save still waiting out the 700 ms
+  debounce was flushed first, so it overwrote the outside change on disk ("recent typing wins"),
+  while a save held back behind a write still in flight was thrown away with only a log line that
+  alarmed testers even in the harmless case. PT-4970 ("Step 2") proposed letting the outside change
+  win, and UX accepted losing up to about half a second of typing to it.
+- **Decision:**
+  - The claim decides who wins. With it, the editor's edits win (unchanged). Without it, the
+    incoming chapter wins: unsaved edits, whether still waiting on the debounce or held back
+    behind a write in flight, are thrown away, and the user is warned in the log and notified
+    (`discardUnsavedEdits` in the web view, called by `useEditorPdpSync`'s replace path). A
+    Send/Receive merge is treated the same way.
+  - To keep that loss rare, the editor sends its waiting edits as soon as it loses the claim
+    instead of waiting out the debounce: on window blur, on focus leaving the editor or the
+    footnotes pane for something else in its web view, on a chapter switch, and on page teardown. A save already in flight
+    still holds the new one back; the held edits reach the backend when that save's update comes
+    back to an editor still showing the chapter.
+  - Edits lost because the editor left the chapter or closed while a save was in flight are
+    warned about and notified the same way, until PT-5043 sends them instead. Leaving is reported
+    when the next chapter replaces the editor, not at the chapter switch: until then the editor
+    still shows the chapter, and a user who comes back to it in time still has the edits sent.
+- **Alternatives:** Keep "recent typing wins" (flush before replacing): rejected, because it
+  silently overwrites a change made outside the editor (Find & Replace, a merge) with a copy that
+  predates it. Merge the unsaved edits onto the incoming chapter: not done; several days of work
+  and a team/UX decision on overlapping changes (PT-4992 records it as an option). Send waiting
+  edits on claim loss even while a save is in flight: rejected, because the two saves would race to
+  disk in either order.
+- **Consequences:** The window in which typing can be lost shrinks to "a save is in flight when the
+  claim ends", which is usually a fraction of a second. A save the backend reformats (Unicode
+  normalization and some invisible characters: rows S-5 and S-6 of
+  `Scripture-Data-Fidelity-Catalog.md`) comes back looking like an outside change, so held edits
+  behind it are thrown away and reported even though nothing else changed the chapter; held edits
+  therefore get the plain "not saved" notice, never the "changed outside this editor" one. That
+  loss is catalog row O-15, which PT-5043 is to fix. A loss on leaving a chapter is reported once,
+  when the next chapter replaces the editor, however many edits reach it while that chapter loads.
+  While the next chapter
+  loads after navigation, the editor holds off typing, pasting and the like (`usePauseEditing`), but
+  an edit that does not come through its own keyboard (for example from the footnotes pane) can
+  still reach the chapter being left. Its save is refused (`isTypingLostToNavigation`) or thrown
+  away, and it is reported as lost when the next chapter replaces the editor; PT-5043 is to send it
+  to the chapter it was made in.
+- **Source:** PT-5048; paranext-core PR #2998.
+
 ## adr-editor-yields-to-window-focus-subject: The Scripture editor's typing hold yields to the window focus subject
 
 - **Date:** 2026-10-29
@@ -3569,6 +3714,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   differing update from another view is held back for up to `EDITOR_OWNERSHIP_WINDOW_MS`, and this
   view's copy is pushed over it.
 - **Source:** PT-4968
+- **Amended 2026-11-06:** an incoming chapter the editor has no claim on no longer flushes pending
+  saves before it replaces the editor; the edits are thrown away and the user is told. Losing the
+  claim sends waiting edits at once instead. See `adr-editor-unsaved-edits-lose-to-unclaimed-updates`.
 
 ## adr-empty-is-zero-state-primitive: shadcn `Empty` is the zero-state-with-action primitive; `EmptyState` stays message-only
 
