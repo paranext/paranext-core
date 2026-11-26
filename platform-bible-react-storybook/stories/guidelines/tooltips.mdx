@@ -119,6 +119,23 @@ distinction on its own — no parentheses needed.
 
 For which symbol or word to use per key on each OS, and how to pick the spelling for the user's OS, see [Keyboard shortcuts](?path=/docs/guidelines-keyboard-shortcuts--docs#detecting-the-platform).
 
+### Shortcut keycaps read themselves out
+
+Keycaps rendered by `ShortcutKeys` outside a tooltip — the shortcut at the end of a menu item, for
+example — carry a tooltip of their own that reads the shortcut out: "Press Control, Shift and N".
+It opens beside the keycaps at the inline end of the menu, after the pointer rests on them for
+400 ms, and closes on any key so the menu keeps its keyboard handling. Callers do nothing:
+Platform.Bible supplies the localized text at the root of every window and web view.
+
+This is a deliberate exception to [Avoid redundant tooltips](#required-contexts): on Windows and
+Linux the readout mostly repeats the keycaps, but every shortcut gets it so the behavior is the same
+everywhere and a symbol or abbreviation (`⌘`, `⌥`, `⇧`, arrows, `PgDn`) is always spelled out.
+
+Keycaps **inside** a tooltip, such as the shortcut in an Undo button's tooltip, add no tooltip of
+their own: a tooltip cannot open inside another one.
+
+Key names are English for now, as the hints themselves are; localizing them is tracked by PT-4629.
+
 ---
 
 ## When to use a tooltip
