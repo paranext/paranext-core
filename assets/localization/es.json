@@ -755,6 +755,8 @@
   "%shareLayoutDialog_textCollection_hint%": "La colección de textos incluye los recursos marcados de todas las pestañas ({count})",
   "%shareLayoutDialog_textCollectionResources_label%": "Recursos de la colección de textos",
   "%shareLayoutDialog_title%": "Compartir diseño con el equipo",
+  "%shortcutKeys_tooltip%": "Presione {keys}",
+  "%shortcutKeys_tooltip_language%": "es",
   "%some_localization_key%": "Esto es el texto en español para %some_localization_key%.",
   "%sourceLanguageIndexedList_backToList%": "Volver a la lista",
   "%sourceLanguageIndexedList_emptyState%": "No se encontraron elementos",
