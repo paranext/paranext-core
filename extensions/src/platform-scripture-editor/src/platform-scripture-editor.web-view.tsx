@@ -4080,47 +4080,61 @@ function PlatformScriptureEditor({
 
       // An open command surface's in-progress input is excluded by the editor itself
       // (`setTransientInput`), so what arrives here is already the document we mean to save.
+      const preparation = prepareUsjForChapterSave(
+        usjFromEditor,
+        usjFromPdp,
+        savedChapterSelector.chapterNum,
+        // Only acted on when the repair is pushed back, which happens only while this editor still
+        // shows the chapter being saved, so the caret addresses the same document.
+        editorRef.current?.getSelection(),
+      );
+      // Read live rather than captured, so a save that fires after a chapter switch compares the
+      // chapter it was scheduled for against the chapter actually on screen now.
+      const currentChapterKey = chapterKeyRef.current;
+      // The debounced save fires only once typing has paused this long, so a save seeing a newer
+      // edit is one that ran mid-typing — but only while the keys still come here, which takes both
+      // the window's focus and focus on the editor or on the footnotes pane (whose row edits stamp
+      // the same edit time). The saves sent when focus leaves the editor run inside that window by
+      // definition, and they are the last saves before the user moves on: a document left
+      // uncorrected there stays wrong on screen, and no later save puts it right until the editor is
+      // edited again. `document.hasFocus()` as well as the editor's own `isFocused()`: this web view
+      // is an iframe, and the editor element stays its document's `activeElement` after the window
+      // it lives in has lost focus. The window's focus alone is not enough either: when focus leaves
+      // the editor, for a control in this web view or for anywhere outside it, `focusout` fires
+      // while `document.hasFocus()` is still true.
+      // An open palette or footnote popover never stamps that edit time (a pane row's edits do,
+      // but not while the row sits idle), so an open session is asked about directly, with the
+      // same staleness bound the PDP sync uses — and unconditionally, since a focused palette is
+      // an overlay outside this iframe, so the window is blurred exactly when the session most
+      // needs protecting. Resolved here rather than through
+      // `isEditingSessionActive`, which also closes a stale note session: a save is no place to
+      // close the user's editor.
+      const isUserEditing =
+        (document.hasFocus() &&
+          (!!editorRef.current?.isFocused() || paneHasFocusRef.current) &&
+          lastLocalEditTimestamp.current !== undefined &&
+          Date.now() - lastLocalEditTimestamp.current < PDP_SAVE_DEBOUNCE_MS) ||
+        resolveEditingSessionActivity({
+          hasPaletteSession: paletteSession.current !== undefined,
+          editingNoteKey: editingNoteKey.current,
+          noteSessionRefreshedAtMs: editingNoteSessionRefreshedAt.current,
+          nowMs: Date.now(),
+        }).isActive;
       const { usjToSave, shouldAnnounceRepairOnWrite } = applyChapterSavePreparation({
-        preparation: prepareUsjForChapterSave(
-          usjFromEditor,
-          usjFromPdp,
-          savedChapterSelector.chapterNum,
-          // Only acted on when the repair is pushed back, which happens only while this editor
-          // still shows the chapter being saved, so the caret addresses the same document.
-          editorRef.current?.getSelection(),
-        ),
+        preparation,
         savedChapterKey,
-        // Read live rather than captured, so a save that fires after a chapter switch compares the
-        // chapter it was scheduled for against the chapter actually on screen now.
-        currentChapterKey: chapterKeyRef.current,
-        // The debounced save fires only once typing has paused this long, so a save seeing a newer
-        // edit is one that ran mid-typing — but only while the keys still come here. The save on
-        // leaving runs inside that window by definition, and a document left uncorrected there
-        // stays wrong on screen until the next edit, which then corrects it and takes the caret to
-        // the chapter line, far from wherever the user has started typing. `document.hasFocus()`
-        // rather than the editor's own `isFocused()`: this web view is an iframe, and the editor
-        // element stays its document's `activeElement` after the window it lives in has lost focus.
-        // An open palette or footnote popover never stamps that edit time (a pane row's edits do,
-        // but not while the row sits idle), so an open session is asked about directly, with the
-        // same staleness bound the PDP sync uses — and unconditionally, since a focused palette is
-        // an overlay outside this iframe, so the window is blurred exactly when the session most
-        // needs protecting. Resolved here rather than through
-        // `isEditingSessionActive`, which also closes a stale note session: a save is no place to
-        // close the user's editor.
-        isUserEditing:
-          (document.hasFocus() &&
-            lastLocalEditTimestamp.current !== undefined &&
-            Date.now() - lastLocalEditTimestamp.current < PDP_SAVE_DEBOUNCE_MS) ||
-          resolveEditingSessionActivity({
-            hasPaletteSession: paletteSession.current !== undefined,
-            editingNoteKey: editingNoteKey.current,
-            noteSessionRefreshedAtMs: editingNoteSessionRefreshedAt.current,
-            nowMs: Date.now(),
-          }).isActive,
+        currentChapterKey,
+        isUserEditing,
         applyRepairToEditor: putRepairedUsjInEditor,
         notifyRepair: () =>
           notifyChapterMarkerCorrected(savedBookName, savedChapterSelector.chapterNum),
       });
+      if (preparation.repairedUsj && (currentChapterKey !== savedChapterKey || isUserEditing))
+        logger.debug(
+          `Corrected the chapter marker of ${savedChapterKey} without putting the correction on screen: ` +
+            `${currentChapterKey !== savedChapterKey ? `the editor now shows ${currentChapterKey}` : 'the user is still editing'}; ` +
+            `${usjToSave ? 'the user is told once it is written' : 'nothing to write, so the user is not told'}`,
+        );
 
       if (usjToSave)
         return saveUsjToPdpInternal(
@@ -4934,7 +4948,7 @@ function PlatformScriptureEditor({
       flush();
       lostEdits.report('editorClosed');
     };
-    const flushOnBlur = () => {
+    const flushOnBlur = (reason: string) => {
       // A FOCUSED marker palette is an overlay OUTSIDE this iframe, so opening one blurs this
       // window — a mid-edit save per palette interaction, not a real focus loss. Skip the blur
       // flush while a palette session is open: nothing typed during the session lands in the
@@ -4942,8 +4956,11 @@ function PlatformScriptureEditor({
       // the debounce simply keeps running, and the chapter-switch and teardown flushes still
       // cover the windows this one exists for.
       if (paletteSession.current !== undefined) return;
+      if (saveUsjToPdpDebounced.isPending())
+        logger.debug(`Sending the editor's waiting save now: ${reason}`);
       flush();
     };
+    const flushOnWindowBlur = () => flushOnBlur('the window lost focus');
     // Focus moving to a toolbar or another control in this web view leaves the window focused, so
     // `blur` does not fire, but the editor no longer has focus and so no longer claims the chapter.
     // Scoped to the editor itself, not `editorContainerRef`, which also holds the footnotes pane:
@@ -4958,16 +4975,16 @@ function PlatformScriptureEditor({
           event.relatedTarget,
         )
       )
-        flushOnBlur();
+        flushOnBlur('focus left the editor');
     };
-    flushOnLeavingPaneRef.current = flushOnBlur;
-    window.addEventListener('blur', flushOnBlur);
+    flushOnLeavingPaneRef.current = () => flushOnBlur('focus left the footnotes pane');
+    window.addEventListener('blur', flushOnWindowBlur);
     window.addEventListener('focusout', flushOnLeavingEditor);
     window.addEventListener('pagehide', flushOnPageHide);
     window.addEventListener('beforeunload', flush);
     return () => {
       flushOnLeavingPaneRef.current = () => {};
-      window.removeEventListener('blur', flushOnBlur);
+      window.removeEventListener('blur', flushOnWindowBlur);
       window.removeEventListener('focusout', flushOnLeavingEditor);
       window.removeEventListener('pagehide', flushOnPageHide);
       window.removeEventListener('beforeunload', flush);

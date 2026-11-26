@@ -301,6 +301,37 @@ test.describe('scripture editor chapter-marker repair', () => {
       await mainPage.keyboard.press('Escape');
     });
 
+    await test.step("a marker corrected when focus moves to a control in the editor's own web view is put right there and then", async () => {
+      // The other way out of the editor: focus stays in this web view's window, so it never loses
+      // focus, but the keys stop coming to the editor all the same. The save sent then is the last
+      // one before the user moves on, so it has to put the correction on screen and say so, and
+      // leave the caret with the control the user moved to.
+      await clearRecordedToasts(mainPage);
+      await retypeChapterNumber('7');
+      // Moved in the page rather than with a Playwright click, which takes long enough for the
+      // ordinary trailing save to fire first and carry this step through the path it is meant to
+      // leave out (as the step above explains).
+      const movedToControl = await editorEvalFrame.evaluate(() => {
+        const control = [...document.querySelectorAll('button')].find(
+          (button) => !button.closest('.editor-container'),
+        );
+        control?.setAttribute('data-e2e-focus-target', '');
+        control?.focus();
+        return document.activeElement === control;
+      });
+      expect(movedToControl, 'focus moved to a control outside the editor').toBe(true);
+
+      await expect
+        .poll(() => recordedToasts(mainPage), { timeout: 20_000 })
+        .toEqual(expect.arrayContaining([expect.stringContaining(JONAH_1_CORRECTION_MESSAGE)]));
+      await expect.poll(() => chapterGlyph.textContent(), { timeout: 20_000 }).toBe('\\c\u00A01 ');
+      expect(
+        await editorEvalFrame.evaluate(() =>
+          document.activeElement?.hasAttribute('data-e2e-focus-target'),
+        ),
+      ).toBe(true);
+    });
+
     await test.step('accepts a chapter whose markers disagree with it, and stores it corrected', async () => {
       // The provider's own half, on Jonah 2: the editor above only viewed that chapter, so its
       // document on disk is still the sample's.

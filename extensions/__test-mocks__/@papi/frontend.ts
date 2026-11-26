@@ -19,3 +19,11 @@ const papi = {
 };
 
 export default papi;
+
+/** Silent stand-in for the PAPI logger, so code that logs can run under test. */
+export const logger = {
+  debug: vi.fn(),
+  info: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn(),
+};

@@ -1,3 +1,4 @@
+import { logger } from '@papi/frontend';
 import { useEffect } from 'react';
 
 /**
@@ -101,6 +102,10 @@ export function usePauseEditing(
       if (!(event.target instanceof Node) || !root.contains(event.target)) return;
       event.preventDefault();
       event.stopPropagation();
+      // The user sees nothing happen, so say in the log why the edit did not land.
+      logger.debug(
+        `Held off ${event instanceof KeyboardEvent ? `the ${event.key} key` : `a ${event.type}`} in the editor while the chapter loads`,
+      );
     };
     const holdOffEditingKey = (event: KeyboardEvent) => {
       if (isHeldOffKey(event)) holdOff(event);

@@ -1160,24 +1160,30 @@ describe('Scripture editor when its latest edits cannot be saved', () => {
       });
     };
 
+    /** The user's edit, as the editor reports it: `usj` is the whole document it now holds. */
+    const edit = (usj: unknown) => {
+      act(() => {
+        editorUsj = usj;
+        // The stubbed editor hands its props through; `onUsjChange` is the web view's handler.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        const onUsjChange = editorProps.current?.onUsjChange as (
+          usj: unknown,
+          ops: unknown[],
+          source: string,
+        ) => void;
+        onUsjChange(editorUsj, [], 'local');
+      });
+    };
+
     return {
       saves,
       delivered,
       unmount: () => result?.unmount(),
       /** The user's edit to verse 1 of GEN 1, as the editor reports it. */
-      type: (text: string) => {
-        act(() => {
-          editorUsj = chapterText(1, text);
-          // The stubbed editor hands its props through; `onUsjChange` is the web view's handler.
-          // eslint-disable-next-line no-type-assertion/no-type-assertion
-          const onUsjChange = editorProps.current?.onUsjChange as (
-            usj: unknown,
-            ops: unknown[],
-            source: string,
-          ) => void;
-          onUsjChange(editorUsj, [], 'local');
-        });
-      },
+      type: (text: string) => edit(chapterText(1, text)),
+      edit,
+      /** What the editor holds now, including anything the web view put back into it. */
+      editorUsj: () => editorUsj,
       blurWindow: () => {
         act(() => {
           window.dispatchEvent(new Event('blur'));
@@ -1186,6 +1192,10 @@ describe('Scripture editor when its latest edits cannot be saved', () => {
       /** Gives the editor focus, so it claims the chapter while the user types in it. */
       focus: () => {
         isEditorFocused = true;
+      },
+      /** Takes focus away from the editor, as focus moving to another control does. */
+      unfocus: () => {
+        isEditorFocused = false;
       },
       goToChapter: async (chapterNum: number) => {
         scrRef.chapterNum = chapterNum;
@@ -1336,6 +1346,64 @@ describe('Scripture editor when its latest edits cannot be saved', () => {
       expect(verseText(editor.saves[0].usj)).toBe('In the beginning God');
     } finally {
       outside.remove();
+    }
+  });
+
+  // The window still has focus when focus leaves the editor (for a control in this web view, or
+  // just before the window's own `blur`), and the mistyped number is the latest edit. The save
+  // that focus loss sends must not take the user for still typing in the editor: it is the save
+  // that runs once the keys stop coming, so nothing after it puts the correction on screen.
+  it('corrects a mistyped chapter number and says so when focus leaves the editor right after it', async () => {
+    const hasFocus = vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+    const editor = await setUp();
+    const editorElement = screen.getByTestId('editorial');
+    const outside = document.createElement('button');
+    document.body.append(outside);
+    try {
+      editor.focus();
+      // `\c 1` retyped as `\c 15`; the rest is what the backend already has.
+      editor.edit(chapterText(15, 'In the beginning'));
+      editor.unfocus();
+
+      fireEvent.focusOut(editorElement, { relatedTarget: outside });
+
+      expect(editor.editorUsj()).toEqual(chapterText(1, 'In the beginning'));
+      expect(notificationsSend).toHaveBeenCalledWith(
+        expect.objectContaining({
+          notificationId: expect.stringContaining('chapter-marker-corrected'),
+        }),
+      );
+    } finally {
+      outside.remove();
+      hasFocus.mockRestore();
+    }
+  });
+
+  // A save can run mid-typing: when a running save's update comes back, the editor sends whatever
+  // it holds by then. Typing in a footnotes-pane row is typing in this document too, so a
+  // chapter-marker correction must not replace the document under the row being edited.
+  it('leaves a mistyped chapter number on screen while the user is typing in the footnotes pane', async () => {
+    const hasFocus = vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+    const editor = await setUp({ footnotesPaneVisible: true });
+    const pane = document.querySelector<HTMLElement>('[data-footnotes-pane]');
+    try {
+      if (!pane) throw new Error('The footnotes pane did not render');
+      editor.type('In the beginning God');
+      editor.blurWindow();
+      // Positive control: a save is in flight, so the next one waits for its update.
+      expect(editor.saves).toHaveLength(1);
+
+      fireEvent.focusIn(pane);
+      editor.edit(chapterText(15, 'In the beginning God created'));
+      await editor.finishSave(0);
+      await editor.deliver(1, chapterText(1, 'In the beginning God'));
+
+      // Positive control: the update did send what the editor held, corrected.
+      expect(editor.saves).toHaveLength(2);
+      expect(editor.saves[1].usj).toEqual(chapterText(1, 'In the beginning God created'));
+      expect(editor.editorUsj()).toEqual(chapterText(15, 'In the beginning God created'));
+    } finally {
+      hasFocus.mockRestore();
     }
   });
 
