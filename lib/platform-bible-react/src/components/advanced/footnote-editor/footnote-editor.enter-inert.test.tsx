@@ -30,6 +30,7 @@ import {
 import {
   caretIsInsideNote,
   editableView,
+  hiddenView,
   installPopoverJsdomStubs,
   renderPopoverAndWaitForInit,
   visibleView,
@@ -46,12 +47,6 @@ if (typeof document.execCommand !== 'function') {
 const globalStubs: { ClipboardEvent?: unknown } = globalThis;
 if (typeof globalStubs.ClipboardEvent === 'undefined')
   globalStubs.ClipboardEvent = function ClipboardEvent() {};
-
-const hiddenView: EditorOptions['view'] = {
-  markerMode: 'hidden',
-  hasSpacing: true,
-  isFormattedFont: true,
-};
 
 const nonEditableViews: [string, EditorOptions['view']][] = [
   ['hidden markers (formatted view)', hiddenView],

@@ -1,5 +1,5 @@
 import { type CSSProperties, type ComponentProps, ReactNode, useState } from 'react';
-import { Check, ChevronDown } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 import { cn } from '@/utils/shadcn-ui/utils';
 import { Button, ButtonProps } from '@/components/shadcn-ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
@@ -142,13 +142,8 @@ export function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
           onChange(option);
           setOpen(false);
         }}
-        className="tw:gap-1.5!"
+        data-checked={!!value && getOptionLabel(value) === optionLabel}
       >
-        <Check
-          className={cn('tw:h-4 tw:w-4 tw:shrink-0', {
-            'tw:opacity-0': !value || getOptionLabel(value) !== optionLabel,
-          })}
-        />
         <span className="tw:flex-1 tw:overflow-hidden tw:text-ellipsis tw:whitespace-nowrap">
           {optionLabel}
           {secondaryLabel && <span className="tw:text-muted-foreground"> · {secondaryLabel}</span>}

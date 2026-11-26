@@ -357,6 +357,12 @@
       "message": "The dialog was renamed from \"Share layout with team\" to \"Team layout\". The new key is %shareLayoutDialog_teamLayout_title%."
     }
   },
+  "%shortcutKeys_tooltip%": {
+    "notes": "Tooltip on the keycaps of a keyboard shortcut in a menu. {keys} becomes the key names joined as a list in the language %shortcutKeys_tooltip_language% names, for example \"Control, Shift and N\". Translate it together with %shortcutKeys_tooltip_language%."
+  },
+  "%shortcutKeys_tooltip_language%": {
+    "notes": "Not shown to users. The BCP 47 tag of the language %shortcutKeys_tooltip% is written in (\"es\", \"fr\", \"zh-Hans\"), used to join the key names with that language's \"and\". Set it in every locale that translates %shortcutKeys_tooltip%, so the two always fall back to English together."
+  },
   "%submit%": {
     "fallbackKey": "%yes%"
   },

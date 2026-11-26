@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { ShortcutKeysLocalizedStringsProvider } from '@/context/shortcut-keys-strings.context';
 import { ShortcutKeys } from './shortcut-keys.component';
 
 const meta: Meta<typeof ShortcutKeys> = {
@@ -10,6 +11,8 @@ const meta: Meta<typeof ShortcutKeys> = {
       description: {
         component: `
 Renders one already-resolved keyboard shortcut hint as keycaps: a single key is a lone \`Kbd\`, while a combination puts each key in its own \`Kbd\` inside a \`KbdGroup\`. Prefer this over building the \`KbdGroup\` by hand. It follows the hint's own spelling (see [Guidelines/Keyboard shortcuts](?path=/docs/guidelines-keyboard-shortcuts--docs)): macOS symbols sit adjacent with no separator, while Windows/Linux keys get a literal \`+\` between keycaps. Choosing the spelling for the user's OS is up to the caller.
+
+Hovering the keycaps shows a tooltip that reads the shortcut out ("Press Control and +"). The app provides its text at the root of every window and web view through \`ShortcutKeysLocalizedStringsProvider\`, which these stories add themselves. Inside another tooltip's content the keycaps add no tooltip of their own.
 
 \`hint\` takes a single key combination — such as a menu item's \`shortcut\` string — not a raw keyboard shortcuts catalog \`keys\` string with \`/\`-separated alternatives.
         `,
@@ -24,9 +27,13 @@ Renders one already-resolved keyboard shortcut hint as keycaps: a single key is 
   },
   decorators: [
     (Story) => (
-      <div className="tw:p-4">
-        <Story />
-      </div>
+      <ShortcutKeysLocalizedStringsProvider
+        localizedStrings={{ '%shortcutKeys_tooltip%': 'Press {keys}' }}
+      >
+        <div className="tw:p-4">
+          <Story />
+        </div>
+      </ShortcutKeysLocalizedStringsProvider>
     ),
   ],
 };

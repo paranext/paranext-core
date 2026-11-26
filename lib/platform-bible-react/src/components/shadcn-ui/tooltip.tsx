@@ -13,6 +13,8 @@ import { ButtonProps, buttonVariants } from '@/components/shadcn-ui/button';
 import { Z_INDEX_TOOLTIP } from '@/components/z-index';
 // CUSTOM: Shared portal-container factory (also used by popover.tsx) so this workaround is defined once
 import { createPortalContainerContext } from '@/context/portal-container.context';
+// CUSTOM: Marks tooltip content so components inside it do not add a nested tooltip
+import { InTooltipContext } from '@/context/in-tooltip.context';
 
 // CUSTOM: Added @inheritdoc TSDoc pointing to Tooltip for documentation inheritance
 /** @inheritdoc Tooltip */
@@ -148,7 +150,9 @@ function TooltipContent({
         )}
         {...props}
       >
-        {children}
+        {/* CUSTOM: Wrapped children in InTooltipContext so components that add a tooltip of their
+            own (ShortcutKeys) leave it out here, since a tooltip cannot open inside a tooltip */}
+        <InTooltipContext.Provider value>{children}</InTooltipContext.Provider>
         {/* CUSTOM: Conditionally render arrow based on showArrow prop */}
         {showArrow && (
           <TooltipPrimitive.Arrow

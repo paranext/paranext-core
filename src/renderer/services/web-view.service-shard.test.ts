@@ -3884,6 +3884,7 @@ describe('React web view bootstrap teardown', () => {
       createRoot: vi.fn(() => root),
       React: { createElement: vi.fn(() => ({})) },
       WebViewErrorBoundary: () => undefined,
+      ShortcutKeysLocalizationRoot: () => undefined,
       papi: { webViews: { onDidUpdateWebView: vi.fn(() => unsubscribeUpdateWebView) } },
       getSavedWebViewDefinition: () =>
         canRender ? { id: 'wv-react', webViewType: 'test.type' } : undefined,
@@ -3954,6 +3955,39 @@ describe('React web view bootstrap teardown', () => {
     // A replaced document's root would otherwise keep rendering inside the parent's React, with
     // `window` now resolving to the replacement document's half-initialized globals
     expect(root.unmount).toHaveBeenCalledTimes(1);
+  });
+
+  test("gives the frame the main window's shared platform-bible-react contexts", async () => {
+    const content = await openReactWebViewContent();
+    // The bridge as generated, with the key names the service interpolated
+    const bridgeStart = content.indexOf("// The web view's own copy of platform-bible-react");
+    const bridgeEnd = content.indexOf(
+      'window.SillsdevScripture = window.parent.SillsdevScripture;',
+    );
+    expect(bridgeStart).toBeGreaterThanOrEqual(0);
+    expect(bridgeEnd).toBeGreaterThan(bridgeStart);
+    const bridge = content.slice(bridgeStart, bridgeEnd);
+
+    const inTooltipKey = Symbol.for('platform-bible-react.context.inTooltip');
+    const localizationKey = Symbol.for('platform-bible-react.context.shortcutKeysLocalization');
+    const inTooltipSentinel = { name: 'main window inTooltip context' };
+    const localizationSentinel = { name: 'main window shortcutKeysLocalization context' };
+    const frame: Record<string | symbol, unknown> = {
+      parent: {
+        [inTooltipKey]: inTooltipSentinel,
+        [localizationKey]: localizationSentinel,
+        // A slot under a non-registry symbol of the same description is not what copies look up
+        [Symbol('platform-bible-react.context.inTooltip')]: 'wrong slot',
+      },
+    };
+
+    // `window` is passed in rather than made the context's global: a contextified global does not
+    // pass symbol-keyed writes through to the object behind it. `Symbol.for` keys are shared across
+    // realms, so the slots the frame ends up with are the ones every copy inside it reads
+    vm.runInNewContext(bridge, vm.createContext({ window: frame }));
+
+    expect(frame[inTooltipKey]).toBe(inTooltipSentinel);
+    expect(frame[localizationKey]).toBe(localizationSentinel);
   });
 
   test('captures the root registration function before it deletes the parent window', async () => {

@@ -40,20 +40,13 @@ import {
   joinGroupsWithSeparators,
   LeadingIconSlot,
   MenuGroupNode,
-  MenuItemNodeSource,
 } from './menu.util';
 import { SelectMenuItemHandler } from './platform-menubar.component';
-import MenuItemIcon from './menu-icon.component';
+import MenuItemIcon, { MenuCheckSlot } from './menu-icon.component';
 
 const createDropdownSeparator = (groupKey: string) => (
   <DropdownMenuSeparator key={`separator-${groupKey}`} />
 );
-
-/**
- * A checkbox item's check indicator sits at the end of its row in this menu, so it reserves no
- * leading icon slot. Clearing `checked` keeps it out of the slot decision.
- */
-const withoutCheckedState = (item: MenuItemNodeSource) => ({ ...item, checked: undefined });
 
 /**
  * Renders the items of the given groups in the order given, one entry per group. A submenu joins
@@ -80,6 +73,7 @@ const getGroupContent = (
       // branch attaches the tooltip to `DropdownMenuSubTrigger` itself instead, which is the
       // element the tooltip needs to describe anyway.
       if ('command' in item) {
+        const isCheckboxItem = item.checked !== undefined;
         const itemContent = (
           <>
             <MenuItemIcon
@@ -89,6 +83,7 @@ const getGroupContent = (
               leading
               leadingSlot={leadingSlot}
             />
+            {isCheckboxItem && <MenuCheckSlot checked={!!item.checked} />}
             {item.label}
             <MenuItemIcon
               iconName={item.iconNameAfter}
@@ -111,9 +106,12 @@ const getGroupContent = (
         return (
           <Tooltip key={`tooltip-${item.label}-${item.command}`}>
             <TooltipTrigger asChild>
-              {item.checked !== undefined ? (
+              {isCheckboxItem ? (
                 <DropdownMenuCheckboxItem
                   key={`dropdown-menu-item-${item.label}-${item.command}`}
+                  // Start padding matches DropdownMenuItem. The built-in indicator is hidden because
+                  // MenuCheckSlot draws the check after the icon slot instead
+                  className="tw:ps-1.5 tw:[&>[data-slot=dropdown-menu-checkbox-item-indicator]]:hidden"
                   checked={item.checked}
                   disabled={item.disabled}
                   onSelect={handleSelect}
@@ -168,9 +166,7 @@ const getGroupContent = (
                   subGroups,
                   onSelectMenuItem,
                   getLeadingIconSlot(
-                    subGroups.flatMap((group) =>
-                      group.items.map(({ item: subItem }) => withoutCheckedState(subItem)),
-                    ),
+                    subGroups.flatMap((group) => group.items.map(({ item: subItem }) => subItem)),
                   ),
                 ),
                 createDropdownSeparator,
@@ -249,9 +245,7 @@ export default function TabDropdownMenu({
   // Every section shares one content, so one slot keeps all their labels aligned
   const leadingSlot = getLeadingIconSlot(
     sections.flatMap(({ columnKey }) =>
-      groupsOfSection(columnKey).flatMap((group) =>
-        group.items.map(({ item }) => withoutCheckedState(item)),
-      ),
+      groupsOfSection(columnKey).flatMap((group) => group.items.map(({ item }) => item)),
     ),
   );
 

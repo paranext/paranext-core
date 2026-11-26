@@ -151,10 +151,19 @@ import {
   reconcileSavedLayout,
   savedLayoutHasAnyTabs,
 } from '@shared/utils/saved-layout-reconciliation.util';
+import { getSharedContextKey, SHARED_CONTEXT_NAMES } from 'platform-bible-react/experimental';
 import {
   buildLegacyColorVarsLogMessage,
   transformLegacyColorVars,
 } from './web-views/web-view-legacy-color-vars.util';
+
+/**
+ * The `Symbol.for` names of the contexts platform-bible-react shares between its copies, so each
+ * web view's frame can be given the main window's contexts before the web view's own copy loads
+ */
+const SHARED_CONTEXT_GLOBAL_KEY_NAMES = SHARED_CONTEXT_NAMES.map(
+  (name) => getSharedContextKey(name).description,
+);
 
 // These web view lifecycle emitters are created at module load as buffered emitters so they're
 // usable immediately. Sync paths like `onLayoutChange` and `updateWebViewDefinitionSync` can run
@@ -2992,6 +3001,12 @@ export async function openOrReloadWebView(
   window.ReactDOMClient = window.parent.ReactDOMClient;
   window.createRoot = window.parent.createRoot;
   window.WebViewErrorBoundary = window.parent.WebViewErrorBoundary;
+  window.ShortcutKeysLocalizationRoot = window.parent.ShortcutKeysLocalizationRoot;
+  // The web view's own copy of platform-bible-react finds the contexts the platform provides here
+  ${JSON.stringify(SHARED_CONTEXT_GLOBAL_KEY_NAMES)}.forEach((keyName) => {
+    const key = Symbol.for(keyName);
+    window[key] = window.parent[key];
+  });
   window.SillsdevScripture = window.parent.SillsdevScripture;
   var require = window.parent.webViewRequire;
   var getWebViewStateById = window.parent.getWebViewStateById;
@@ -3194,7 +3209,9 @@ export async function openOrReloadWebView(
                   // Every React web view mounts here, with nothing above it, so an uncaught render
                   // throw would tear down this iframe's whole root and leave an empty pane. The
                   // boundary is the only thing between that throw and a blank web view, which is
-                  // why it wraps here rather than in any one extension's component.
+                  // why it wraps here rather than in any one extension's component. The shortcut
+                  // keys strings wrap here for the same reason: every shortcut keycap in every web
+                  // view gets its tooltip without the web view asking for it.
                   root.render(
                     React.createElement(
                       WebViewErrorBoundary,
@@ -3203,7 +3220,11 @@ export async function openOrReloadWebView(
                         webViewType: savedWebViewDefinition.webViewType,
                         webViewTitle: savedWebViewDefinition.title,
                       },
-                      React.createElement(globalThis.webViewComponent, webViewProps),
+                      React.createElement(
+                        ShortcutKeysLocalizationRoot,
+                        null,
+                        React.createElement(globalThis.webViewComponent, webViewProps),
+                      ),
                     ),
                   );
                 }

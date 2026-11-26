@@ -135,3 +135,91 @@ describe('CommandInput — Space-selects-highlighted-item is OPT-IN', () => {
     expect(onSelect).not.toHaveBeenCalled();
   });
 });
+
+describe('CommandItem check', () => {
+  const renderRows = () =>
+    render(
+      <Command>
+        <CommandList>
+          <CommandItem value="checked" data-checked>
+            Checked
+          </CommandItem>
+          <CommandItem value="unchecked" data-checked={false}>
+            Unchecked
+          </CommandItem>
+          <CommandItem value="plain">Plain</CommandItem>
+        </CommandList>
+      </Command>,
+    );
+  const rowOf = (name: string) => screen.getByRole('option', { name });
+  const checkOf = (row: HTMLElement) => row.querySelector('.tabler-icon-check');
+
+  it('renders the check before the label, on the leading side', () => {
+    renderRows();
+    const row = rowOf('Checked');
+    // firstChild, not firstElementChild: the label is a text node, so only this sees the order
+    expect(row.firstChild).toBe(checkOf(row));
+  });
+
+  it('passes data-checked through as "true" or "false", and leaves it off when omitted', () => {
+    renderRows();
+    expect(rowOf('Checked')).toHaveAttribute('data-checked', 'true');
+    expect(rowOf('Unchecked')).toHaveAttribute('data-checked', 'false');
+    expect(rowOf('Plain')).not.toHaveAttribute('data-checked');
+  });
+
+  it('shows the check only when data-checked is true, keeping its space when false', () => {
+    renderRows();
+    const checked = checkOf(rowOf('Checked'));
+    const unchecked = checkOf(rowOf('Unchecked'));
+    expect(checked).not.toBeNull();
+    expect(checked).not.toHaveClass('tw:opacity-0');
+    // Still rendered, so an unchecked label starts where a checked one does
+    expect(unchecked).not.toBeNull();
+    expect(unchecked).toHaveClass('tw:opacity-0');
+  });
+
+  it('renders no check on an item without data-checked, so its own content stays first', () => {
+    render(
+      <Command>
+        <CommandList>
+          <CommandItem value="plain">
+            <span>Genesis 1:1</span>
+            <span>GEN</span>
+          </CommandItem>
+        </CommandList>
+      </Command>,
+    );
+    const row = screen.getByRole('option');
+    expect(checkOf(row)).toBeNull();
+    expect(row.firstElementChild).toHaveTextContent('Genesis 1:1');
+  });
+
+  it('announces the check state through aria-checked, and only on checkable items', () => {
+    renderRows();
+    expect(rowOf('Checked')).toHaveAttribute('aria-checked', 'true');
+    expect(rowOf('Unchecked')).toHaveAttribute('aria-checked', 'false');
+    expect(rowOf('Plain')).not.toHaveAttribute('aria-checked');
+  });
+
+  it("lets a caller's own aria-checked win, for states data-checked cannot express", () => {
+    render(
+      <Command>
+        <CommandList>
+          <CommandItem value="partial" data-checked aria-checked="mixed">
+            Partial
+          </CommandItem>
+        </CommandList>
+      </Command>,
+    );
+    expect(screen.getByRole('option', { name: 'Partial' })).toHaveAttribute(
+      'aria-checked',
+      'mixed',
+    );
+  });
+
+  it('hides the check from assistive technology, since it is decorative', () => {
+    renderRows();
+    expect(checkOf(rowOf('Checked'))).toHaveAttribute('aria-hidden', 'true');
+  });
+});

@@ -88,6 +88,7 @@ export {
   getMarkerPaletteClaimedKeys,
   resolveFilterCharacter,
   handleMarkerPaletteSessionKeyDown,
+  refusesTypedMarkerTrigger,
   type MarkerPaletteKeyEvent,
   type MarkerPaletteKeyOutcome,
   type MarkerPaletteSessionDriver,
@@ -161,6 +162,17 @@ export {
 } from './components/advanced/developer-section/developer-section.component';
 export type { DeveloperSectionProps } from './components/advanced/developer-section/developer-section.component';
 export { ShortcutKeys, type ShortcutKeysProps } from './components/basics/shortcut-keys.component';
+export {
+  SHORTCUT_KEYS_STRING_KEYS,
+  ShortcutKeysLocalizedStringsProvider,
+  type ShortcutKeysLocalizedStrings,
+  type ShortcutKeysLocalizedStringsProviderProps,
+} from './context/shortcut-keys-strings.context';
+export {
+  getSharedContextKey,
+  SHARED_CONTEXT_NAMES,
+  type SharedContextName,
+} from './context/shared-context.util';
 export {
   LucideIcon,
   LUCIDE_ICON_NAMES,
