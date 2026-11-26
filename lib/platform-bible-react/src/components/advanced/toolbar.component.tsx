@@ -1,4 +1,5 @@
 import {
+  APP_MENU_COLUMN_KEY,
   SelectMenuItemHandler,
   PlatformMenubar,
 } from '@/components/advanced/menus/platform-menubar.component';
@@ -6,7 +7,7 @@ import { cn } from '@/utils/shadcn-ui/utils';
 import { ShrinkStepContext, useShrinkStepOverride } from '@/context/shrink-step.context';
 import { useShrinkStep } from '@/hooks/use-shrink-step.hook';
 import { Localized, MultiColumnMenu } from 'platform-bible-utils';
-import { PropsWithChildren, ReactNode, useCallback, useState } from 'react';
+import { PropsWithChildren, ReactNode, useCallback, useRef, useState } from 'react';
 
 export type ToolbarProps = PropsWithChildren<{
   /** The handler to use for menu commands (and eventually toolbar commands). */
@@ -38,6 +39,17 @@ export type ToolbarProps = PropsWithChildren<{
    * https://www.electronjs.org/docs/latest/tutorial/custom-title-bar#create-a-custom-title-bar
    */
   shouldUseAsAppDragArea?: boolean;
+
+  /**
+   * Application icon put at the very start of the toolbar (left side in ltr, right side in rtl).
+   * Clicking it opens the app menu (the menu headed by the product name), as the application icon
+   * does in Paratext 9; clicking it again closes the menu. Its accessible name comes from the icon
+   * itself, e.g. an `img`'s `alt`. Without `menuData` there is no menu to open, so it renders as a
+   * plain icon.
+   *
+   * @experimental This property is unstable and may change shape or disappear without notice
+   */
+  appMenuIcon?: ReactNode;
 
   /** Toolbar children to be put at the start of the toolbar (left side in ltr, right side in rtl) */
   appMenuAreaChildren?: ReactNode;
@@ -111,11 +123,28 @@ export function Toolbar({
   className,
   id,
   children,
+  appMenuIcon,
   appMenuAreaChildren,
   configAreaChildren,
   shouldUseAsAppDragArea,
   menubarVariant = 'default',
 }: ToolbarProps) {
+  // Column key of the open menu, or '' when none is
+  const [openMenu, setOpenMenu] = useState('');
+  // Pressing the icon while the app menu is open dismisses the menu (an outside press) before the
+  // click lands, so whether the click should close rather than open has to be read at pointer down.
+  const wasAppMenuOpenOnPointerDownRef = useRef(false);
+  const handleAppMenuIconPointerDown = useCallback(() => {
+    wasAppMenuOpenOnPointerDownRef.current = openMenu === APP_MENU_COLUMN_KEY;
+  }, [openMenu]);
+  const handleAppMenuIconClick = useCallback(() => {
+    // A keyboard click has no pointer down, so it reads the menu as it is now
+    const wasAppMenuOpen =
+      wasAppMenuOpenOnPointerDownRef.current || openMenu === APP_MENU_COLUMN_KEY;
+    wasAppMenuOpenOnPointerDownRef.current = false;
+    setOpenMenu(wasAppMenuOpen ? '' : APP_MENU_COLUMN_KEY);
+  }, [openMenu]);
+
   // The content row lives in state, not a ref: mutating `ref.current` does not re-run the effect
   // inside `useShrinkStep`, so a ref would leave the observer permanently unattached.
   const [contentRowNode, setContentRowNode] = useState<HTMLDivElement | undefined>(undefined);
@@ -155,6 +184,25 @@ export function Toolbar({
               /* @ts-ignore Electron-only property */
               style={shouldUseAsAppDragArea ? { WebkitAppRegion: 'no-drag' } : undefined}
             >
+              {appMenuIcon &&
+                (menuData ? (
+                  // A secondary, pointer-only way into the app menu: the app menu's own trigger,
+                  // right beside it, and Alt+P are the accessible entry points. So it is
+                  // deliberately out of the tab order and has no tooltip, ARIA menu attributes
+                  // or label of its own.
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    className="tw:flex tw:shrink-0 tw:items-center tw:rounded-md tw:border-0 tw:bg-transparent tw:p-0"
+                    onPointerDown={handleAppMenuIconPointerDown}
+                    onClick={handleAppMenuIconClick}
+                  >
+                    {appMenuIcon}
+                  </button>
+                ) : (
+                  appMenuIcon
+                ))}
+
               {appMenuAreaChildren}
 
               {menuData && (
@@ -163,6 +211,8 @@ export function Toolbar({
                   onOpenChange={onOpenChange}
                   onSelectMenuItem={onSelectMenuItem}
                   variant={menubarVariant}
+                  value={openMenu}
+                  onValueChange={setOpenMenu}
                 />
               )}
             </div>

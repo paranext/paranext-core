@@ -946,7 +946,7 @@ export function PlatformBibleToolbar() {
         )}
         menubarVariant="muted"
         shouldUseAsAppDragArea
-        appMenuAreaChildren={<img width={24} height={24} src={`${logo}`} alt="Application Logo" />}
+        appMenuIcon={<img width={24} height={24} src={`${logo}`} alt="Application Logo" />}
         configAreaChildren={
           <>
             {/* toolbar-sync-area: always in the DOM so onboarding-tour step 4

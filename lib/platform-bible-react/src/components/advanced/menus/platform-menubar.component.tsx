@@ -40,6 +40,9 @@ export interface SelectMenuItemHandler {
   (selectedMenuItem: MenuItemContainingCommand): void;
 }
 
+/** Column key of the application menu (the menu headed by the product name, e.g. "Paratext") */
+export const APP_MENU_COLUMN_KEY = 'platform.app';
+
 const simulateKeyPress = (ref: RefObject<HTMLButtonElement>, keys: KeyboardEventInit[]) => {
   setTimeout(() => {
     keys.forEach((key) => {
@@ -176,6 +179,16 @@ type PlatformMenubarProps = {
 
   /** Style variant for the app menubar component. */
   variant?: 'default' | 'muted';
+
+  /**
+   * Column key of the menu that is open, or `''` when none is. Pass it with `onValueChange` to
+   * control which menu is open from outside the menubar; leave both out to let the menubar manage
+   * it.
+   */
+  value?: string;
+
+  /** Called with the column key of the menu that opened, or `''` when the open menu closed */
+  onValueChange?: (value: string) => void;
 };
 
 /**
@@ -187,6 +200,8 @@ export function PlatformMenubar({
   onSelectMenuItem,
   onOpenChange,
   variant,
+  value,
+  onValueChange,
 }: PlatformMenubarProps) {
   // These refs will always be defined — using undefined! avoids a null check on every use
   // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -208,7 +223,7 @@ export function PlatformMenubar({
 
   const getRefForColumn = (columnKey: string) => {
     switch (columnKey) {
-      case 'platform.app':
+      case APP_MENU_COLUMN_KEY:
         return projectMenuRef;
       case 'platform.window':
         return windowMenuRef;
@@ -283,10 +298,16 @@ export function PlatformMenubar({
   if (!menuData) return undefined;
 
   return (
-    <Menubar ref={menubarRef} className="pr-twp tw:border-0 tw:bg-transparent" variant={variant}>
+    <Menubar
+      ref={menubarRef}
+      className="pr-twp tw:border-0 tw:bg-transparent"
+      variant={variant}
+      value={value}
+      onValueChange={onValueChange}
+    >
       {menuTree.columns.map(({ columnKey, column, groups }) => {
         return (
-          <MenubarMenu key={columnKey}>
+          <MenubarMenu key={columnKey} value={columnKey}>
             <MenubarTrigger ref={getRefForColumn(columnKey)}>{column.label}</MenubarTrigger>
             <MenubarContent
               style={{ zIndex: Z_INDEX_ABOVE_DOCK }} // Need to get over the floating web view z-index 200
