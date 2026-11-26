@@ -242,7 +242,10 @@ function DropdownMenuCheckboxItem({
       data-slot="dropdown-menu-checkbox-item"
       data-inset={inset}
       className={cn(
-        'tw:relative tw:flex tw:cursor-default tw:items-center tw:gap-1.5 tw:rounded-md tw:py-1 tw:pe-8 tw:ps-1.5 tw:text-sm tw:outline-hidden tw:select-none tw:focus:bg-accent tw:focus:text-accent-foreground tw:focus:**:text-accent-foreground tw:data-inset:ps-7 tw:data-disabled:pointer-events-none tw:data-disabled:opacity-50 tw:[&_svg]:pointer-events-none tw:[&_svg]:shrink-0 tw:[&_svg:not([class*=size-])]:size-4',
+        // CUSTOM: Replaced tw:pe-8 tw:ps-1.5 with tw:pe-1.5 tw:ps-7 so the space kept for the
+        // check indicator is on the leading side, matching MenubarCheckboxItem/MenubarRadioItem; the
+        // item text then lines up with tw:data-inset:ps-7 labels and items
+        'tw:relative tw:flex tw:cursor-default tw:items-center tw:gap-1.5 tw:rounded-md tw:py-1 tw:pe-1.5 tw:ps-7 tw:text-sm tw:outline-hidden tw:select-none tw:focus:bg-accent tw:focus:text-accent-foreground tw:focus:**:text-accent-foreground tw:data-inset:ps-7 tw:data-disabled:pointer-events-none tw:data-disabled:opacity-50 tw:[&_svg]:pointer-events-none tw:[&_svg]:shrink-0 tw:[&_svg:not([class*=size-])]:size-4',
         className,
         // CUSTOM: Apply variant-driven styles from menu context
         menuVariants({ variant: context.variant }),
@@ -253,7 +256,9 @@ function DropdownMenuCheckboxItem({
       {...props}
     >
       <span
-        className="tw:pointer-events-none tw:absolute tw:end-2 tw:flex tw:items-center tw:justify-center"
+        // CUSTOM: Moved the indicator from tw:end-2 to tw:start-1.5 and gave it tw:size-4 so the
+        // check sits on the leading side, matching MenubarCheckboxItem/MenubarRadioItem
+        className="tw:pointer-events-none tw:absolute tw:start-1.5 tw:flex tw:size-4 tw:items-center tw:justify-center"
         data-slot="dropdown-menu-checkbox-item-indicator"
       >
         <DropdownMenuPrimitive.ItemIndicator>
@@ -290,7 +295,10 @@ function DropdownMenuRadioItem({
       data-slot="dropdown-menu-radio-item"
       data-inset={inset}
       className={cn(
-        'tw:relative tw:flex tw:cursor-default tw:items-center tw:gap-1.5 tw:rounded-md tw:py-1 tw:pe-8 tw:ps-1.5 tw:text-sm tw:outline-hidden tw:select-none tw:focus:bg-accent tw:focus:text-accent-foreground tw:focus:**:text-accent-foreground tw:data-inset:ps-7 tw:data-disabled:pointer-events-none tw:data-disabled:opacity-50 tw:[&_svg]:pointer-events-none tw:[&_svg]:shrink-0 tw:[&_svg:not([class*=size-])]:size-4',
+        // CUSTOM: Replaced tw:pe-8 tw:ps-1.5 with tw:pe-1.5 tw:ps-7 so the space kept for the
+        // check indicator is on the leading side, matching MenubarCheckboxItem/MenubarRadioItem; the
+        // item text then lines up with tw:data-inset:ps-7 labels and items
+        'tw:relative tw:flex tw:cursor-default tw:items-center tw:gap-1.5 tw:rounded-md tw:py-1 tw:pe-1.5 tw:ps-7 tw:text-sm tw:outline-hidden tw:select-none tw:focus:bg-accent tw:focus:text-accent-foreground tw:focus:**:text-accent-foreground tw:data-inset:ps-7 tw:data-disabled:pointer-events-none tw:data-disabled:opacity-50 tw:[&_svg]:pointer-events-none tw:[&_svg]:shrink-0 tw:[&_svg:not([class*=size-])]:size-4',
         className,
         // CUSTOM: Apply variant-driven styles from menu context
         menuVariants({ variant: context.variant }),
@@ -300,7 +308,9 @@ function DropdownMenuRadioItem({
       {...props}
     >
       <span
-        className="tw:pointer-events-none tw:absolute tw:end-2 tw:flex tw:items-center tw:justify-center"
+        // CUSTOM: Moved the indicator from tw:end-2 to tw:start-1.5 and gave it tw:size-4 so the
+        // check sits on the leading side, matching MenubarCheckboxItem/MenubarRadioItem
+        className="tw:pointer-events-none tw:absolute tw:start-1.5 tw:flex tw:size-4 tw:items-center tw:justify-center"
         data-slot="dropdown-menu-radio-item-indicator"
       >
         <DropdownMenuPrimitive.ItemIndicator>

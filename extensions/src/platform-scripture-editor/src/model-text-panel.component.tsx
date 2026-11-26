@@ -241,7 +241,7 @@ export function ModelTextPanel({
     ref: modelTextLabelRef,
     open: isModelTextLabelTruncatedHovered,
     onPointerEnter: onModelTextLabelPointerEnter,
-    onPointerLeave: onModelTextLabelPointerLeave,
+    onPointerLeave: closeModelTextLabelTooltip,
   } = useTruncationTooltip<HTMLSpanElement>();
 
   const [isSelecting, setIsSelecting] = useState(false);
@@ -915,25 +915,25 @@ export function ModelTextPanel({
     <div className="tw:flex tw:h-screen tw:flex-col editor-container-simple">
       {modelTextLabel && (
         <TooltipProvider>
-          <Tooltip
-            open={isModelTextLabelTruncatedHovered}
-            // Lets Escape, a press on the header, and leaving it close the tooltip. Opening stays
-            // with the truncation check, so a label that fits never gets one.
-            onOpenChange={(open) => {
-              if (!open) onModelTextLabelPointerLeave();
-            }}
-          >
+          {/* No `onOpenChange`: opening stays with the truncation check, so a label that fits
+              never gets one, and Radix's own close requests are not honoured either. Radix also
+              closes a tooltip whenever any tooltip broadcasts its "another tooltip opened" event,
+              which this trigger's own hover handling does on a timer right after the header opened
+              the tooltip. Escape and outside presses are handled on the content; leaving,
+              pressing and blurring the header on the trigger. */}
+          <Tooltip open={isModelTextLabelTruncatedHovered}>
             {/* Both header forms take these from the trigger. Focus opens the tooltip only on a
                 keyboard arrival (`:focus-visible`): focus returned to the header after a pointer
                 pick, or moved there by the panel, must not pop it up. */}
             <TooltipTrigger
               asChild
               onPointerEnter={onModelTextLabelPointerEnter}
-              onPointerLeave={onModelTextLabelPointerLeave}
+              onPointerLeave={closeModelTextLabelTooltip}
+              onPointerDown={closeModelTextLabelTooltip}
               onFocus={(event) => {
                 if (event.currentTarget.matches(':focus-visible')) onModelTextLabelPointerEnter();
               }}
-              onBlur={onModelTextLabelPointerLeave}
+              onBlur={closeModelTextLabelTooltip}
               data-testid="model-text-header"
             >
               {isUserChosenModelText ? (
@@ -945,7 +945,7 @@ export function ModelTextPanel({
                   aria-haspopup="dialog"
                   onClick={() => {
                     // A keyboard press fires no pointer event, so close the tooltip here too.
-                    onModelTextLabelPointerLeave();
+                    closeModelTextLabelTooltip();
                     handlePickModelText();
                   }}
                   aria-label={formatReplacementString(
@@ -972,7 +972,13 @@ export function ModelTextPanel({
                 </div>
               )}
             </TooltipTrigger>
-            <TooltipContent dir="auto">{modelTextLabel}</TooltipContent>
+            <TooltipContent
+              dir="auto"
+              onEscapeKeyDown={closeModelTextLabelTooltip}
+              onPointerDownOutside={closeModelTextLabelTooltip}
+            >
+              {modelTextLabel}
+            </TooltipContent>
           </Tooltip>
         </TooltipProvider>
       )}

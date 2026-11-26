@@ -878,13 +878,10 @@ export const ChapterHighlightAlignment: Story = {
 sit within ${MAX_DIGIT_CENTER_OFFSET_PX}px of the center of the cell that highlights it, and the
 digit must lie inside that cell.
 
-Guards a defect where \`CommandItem\` laid out a trailing element the grid never shows — an
-invisible \`opacity-0\` check icon, 16px wide plus an 8px flex gap — inside a 16px content box.
-\`justify-center\` split the overflow, putting every digit 12px left of its own highlight and
-outside its left edge, so the highlight read as belonging to the neighboring chapter. Hiding that
-child from layout is a single utility class, which is why this needs a test that measures rather
-than one that names a class: the class can be dropped, or a new laid-out child added upstream, with
-nothing else failing.
+Guards against any laid-out child \`CommandItem\` adds to a grid cell, which would push every digit
+off-center from its highlight. Inside a 16px content box, \`justify-center\` splits any overflow,
+so an extra child can put every digit outside its own highlight, and the highlight then reads as
+belonging to the neighboring chapter.
 
 It measures rather than asserts a class name because the cause was upstream — a shadcn baseline
 re-apply, a script that will run again — so the next regression may arrive by a different route and

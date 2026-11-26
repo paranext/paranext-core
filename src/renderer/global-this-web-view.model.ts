@@ -9,6 +9,7 @@ import * as papiCore from '@shared/services/papi-core.service';
 import papiFrontend, { Papi } from '@renderer/services/papi-frontend.service';
 import { getModuleSimilarApiMessage } from '@shared/utils/util';
 import { WebViewErrorBoundary as WebViewErrorBoundaryComponent } from '@renderer/components/web-view-error-boundary.component';
+import { ShortcutKeysLocalizationRoot as ShortcutKeysLocalizationRootComponent } from '@renderer/components/shortcut-keys-localization-root.component';
 import { useWebViewState } from '@renderer/hooks/use-web-view-state.hook';
 import { useWebViewScrollGroupScrRef } from '@renderer/hooks/use-web-view-scroll-group-scr-ref.hook';
 import * as papiReact from '@renderer/services/papi-frontend-react.service';
@@ -141,6 +142,9 @@ declare global {
   // pane. Exposed here for the same reason as `createRoot`: the web view service renders it from
   // inside the iframe's generated script, where only globals are in scope.
   var WebViewErrorBoundary: typeof WebViewErrorBoundaryComponent;
+  // Wraps each web view's root element so every shortcut keycap in it gets its tooltip strings.
+  // Exposed here for the same reason as `WebViewErrorBoundary`.
+  var ShortcutKeysLocalizationRoot: typeof ShortcutKeysLocalizationRootComponent;
   var SillsdevScripture: SillsdevScriptureType;
   // Web view cleanup functions for iframe content
   var webViewCleanup: WebViewCleanup;
@@ -159,6 +163,7 @@ globalThis.ReactDom = ReactDOM;
 globalThis.ReactDOMClient = ReactDOMClient;
 globalThis.createRoot = ReactDOMClient.createRoot;
 globalThis.WebViewErrorBoundary = WebViewErrorBoundaryComponent;
+globalThis.ShortcutKeysLocalizationRoot = ShortcutKeysLocalizationRootComponent;
 globalThis.SillsdevScripture = SillsdevScripture;
 globalThis.webViewRequire = webViewRequire;
 // We store the hook reference because we need it to bind it to the webview's iframe 'window' context

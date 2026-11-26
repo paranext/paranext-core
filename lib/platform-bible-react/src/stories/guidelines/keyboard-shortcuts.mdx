@@ -67,6 +67,8 @@ import { ShortcutKeys } from 'platform-bible-react/experimental';
 
 Pass it the same plain-text hint described above (`⌘Z`, `Ctrl+Shift+T`, …) and it renders **one `Kbd` per key inside a `KbdGroup`** — never a single `Kbd` wrapping the whole combination — matching [Keyboard shortcuts in tooltips](?path=/docs/guidelines-tooltips--docs#keyboard-shortcuts-in-tooltips). See [Basics/ShortcutKeys](?path=/docs/basics-shortcutkeys--docs) for the full set of examples (single key, Windows/Linux multi-key, macOS adjacent symbols, `Ctrl++`).
 
+Hovering the keycaps shows a tooltip that reads the shortcut out ("Press Control, Shift and N"), except where the keycaps already sit inside a tooltip. See [Shortcut keycaps read themselves out](?path=/docs/guidelines-tooltips--docs#shortcut-keycaps-read-themselves-out).
+
 The `KbdGroup` it renders is only present when a shortcut combines **more than one key**. A single-key shortcut — for example, `\` to open the marker menu — comes out as a naked `Kbd` with no group.
 
 The per-OS separator carries over from the string conventions above: **macOS** places its symbols adjacent with no separator, while **Windows** and **Linux** put a literal `+` between keys, rendered as a plain `<span>` between the `Kbd` boxes (per the [shadcn Kbd docs](https://ui.shadcn.com/docs/components/base/kbd)).

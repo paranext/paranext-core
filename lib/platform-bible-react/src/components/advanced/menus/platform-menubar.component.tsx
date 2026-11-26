@@ -30,7 +30,7 @@ import {
   LeadingIconSlot,
   MenuGroupNode,
 } from './menu.util';
-import MenuItemIcon from './menu-icon.component';
+import MenuItemIcon, { MenuCheckSlot } from './menu-icon.component';
 
 /**
  * Callback function that is invoked when a user selects a menu item. Receives the full
@@ -39,6 +39,9 @@ import MenuItemIcon from './menu-icon.component';
 export interface SelectMenuItemHandler {
   (selectedMenuItem: MenuItemContainingCommand): void;
 }
+
+/** Column key of the application menu (the menu headed by the product name, e.g. "Paratext") */
+export const APP_MENU_COLUMN_KEY = 'platform.app';
 
 const simulateKeyPress = (ref: RefObject<HTMLButtonElement>, keys: KeyboardEventInit[]) => {
   setTimeout(() => {
@@ -75,14 +78,14 @@ const getMenubarContent = (
         const isCheckboxItem = item.checked !== undefined;
         const itemContent = (
           <>
-            {/* A checkbox item's check indicator is drawn over this slot, so it has no icon of its own */}
             <MenuItemIcon
-              iconName={isCheckboxItem ? undefined : item.iconNameBefore}
-              icon={isCheckboxItem ? undefined : item.iconPathBefore}
+              iconName={item.iconNameBefore}
+              icon={item.iconPathBefore}
               menuLabel={item.label}
               leading
               leadingSlot={leadingSlot}
             />
+            {isCheckboxItem && <MenuCheckSlot checked={!!item.checked} />}
             {item.label}
             <MenuItemIcon
               iconName={item.iconNameAfter}
@@ -105,8 +108,9 @@ const getMenubarContent = (
         menuEntry = isCheckboxItem ? (
           <MenubarCheckboxItem
             key={`menubar-item-${item.label}-${item.command}`}
-            // Start padding matches MenubarItem; the check indicator sits in the leading slot
-            className="tw:ps-1.5"
+            // Start padding matches MenubarItem. The built-in indicator is hidden because
+            // MenuCheckSlot draws the check after the icon slot instead
+            className="tw:ps-1.5 tw:[&>[data-slot=menubar-checkbox-item-indicator]]:hidden"
             checked={item.checked}
             disabled={item.disabled}
             onSelect={handleSelect}
@@ -175,6 +179,16 @@ type PlatformMenubarProps = {
 
   /** Style variant for the app menubar component. */
   variant?: 'default' | 'muted';
+
+  /**
+   * Column key of the menu that is open, or `''` when none is. Pass it with `onValueChange` to
+   * control which menu is open from outside the menubar; leave both out to let the menubar manage
+   * it.
+   */
+  value?: string;
+
+  /** Called with the column key of the menu that opened, or `''` when the open menu closed */
+  onValueChange?: (value: string) => void;
 };
 
 /**
@@ -186,6 +200,8 @@ export function PlatformMenubar({
   onSelectMenuItem,
   onOpenChange,
   variant,
+  value,
+  onValueChange,
 }: PlatformMenubarProps) {
   // These refs will always be defined — using undefined! avoids a null check on every use
   // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -207,7 +223,7 @@ export function PlatformMenubar({
 
   const getRefForColumn = (columnKey: string) => {
     switch (columnKey) {
-      case 'platform.app':
+      case APP_MENU_COLUMN_KEY:
         return projectMenuRef;
       case 'platform.window':
         return windowMenuRef;
@@ -282,10 +298,16 @@ export function PlatformMenubar({
   if (!menuData) return undefined;
 
   return (
-    <Menubar ref={menubarRef} className="pr-twp tw:border-0 tw:bg-transparent" variant={variant}>
+    <Menubar
+      ref={menubarRef}
+      className="pr-twp tw:border-0 tw:bg-transparent"
+      variant={variant}
+      value={value}
+      onValueChange={onValueChange}
+    >
       {menuTree.columns.map(({ columnKey, column, groups }) => {
         return (
-          <MenubarMenu key={columnKey}>
+          <MenubarMenu key={columnKey} value={columnKey}>
             <MenubarTrigger ref={getRefForColumn(columnKey)}>{column.label}</MenubarTrigger>
             <MenubarContent
               style={{ zIndex: Z_INDEX_ABOVE_DOCK }} // Need to get over the floating web view z-index 200

@@ -1681,6 +1681,35 @@ describe('ModelTextPanel changing a model text the user chose', () => {
       expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
     });
 
+    /** Lets Radix's zero-delay hover timers fire, and React render what they set. */
+    async function settleRadixTimers() {
+      await act(async () => {
+        await new Promise((resolve) => {
+          setTimeout(resolve, 20);
+        });
+      });
+    }
+
+    it('stays open once the pointer has moved over the header', async () => {
+      // Radix's own hover handling opens on a zero-delay timer that can still read this controlled
+      // tooltip as closed; it then broadcasts its "another tooltip opened" event and the tooltip
+      // closes itself the moment it appears. A browser delivers the entry and the first move in one
+      // task, before React re-renders, so both are dispatched inside one `act`. jsdom ships no
+      // `PointerEvent` constructor, and React and Radix read only the type and target.
+      clipLabel();
+      renderUserChosenWeb();
+      const header = await screen.findByRole('button', { name: CHANGE_WEB });
+
+      act(() => {
+        header.dispatchEvent(new MouseEvent('pointerover', { bubbles: true }));
+        header.dispatchEvent(new MouseEvent('pointermove', { bubbles: true }));
+      });
+      expect(await screen.findByRole('tooltip')).toBeInTheDocument();
+      await settleRadixTimers();
+
+      expect(screen.queryByRole('tooltip')).toHaveTextContent('WEB - World English Bible');
+    });
+
     it('closes on Escape', async () => {
       clipLabel();
       arriveBy(true);
@@ -1689,6 +1718,52 @@ describe('ModelTextPanel changing a model text the user chose', () => {
       expect(await screen.findByRole('tooltip')).toBeInTheDocument();
 
       fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
+
+      await waitFor(() => expect(screen.queryByRole('tooltip')).not.toBeInTheDocument());
+    });
+
+    /** Hovers the header and waits for the tooltip and Radix's zero-delay timers to settle. */
+    async function hoverHeader() {
+      clipLabel();
+      renderUserChosenWeb();
+      const header = await screen.findByRole('button', { name: CHANGE_WEB });
+      act(() => {
+        header.dispatchEvent(new MouseEvent('pointerover', { bubbles: true }));
+      });
+      expect(await screen.findByRole('tooltip')).toBeInTheDocument();
+      await settleRadixTimers();
+      return header;
+    }
+
+    it('closes when the pointer leaves the header', async () => {
+      const header = await hoverHeader();
+
+      act(() => {
+        header.dispatchEvent(
+          new MouseEvent('pointerout', { bubbles: true, relatedTarget: document.body }),
+        );
+      });
+
+      await waitFor(() => expect(screen.queryByRole('tooltip')).not.toBeInTheDocument());
+    });
+
+    it('closes when the header is pressed', async () => {
+      const header = await hoverHeader();
+
+      // The press alone, without the click that also closes it, so only the press can close it.
+      act(() => {
+        header.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+      });
+
+      await waitFor(() => expect(screen.queryByRole('tooltip')).not.toBeInTheDocument());
+    });
+
+    it('closes on a press outside the header', async () => {
+      await hoverHeader();
+
+      act(() => {
+        document.body.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+      });
 
       await waitFor(() => expect(screen.queryByRole('tooltip')).not.toBeInTheDocument());
     });

@@ -1556,7 +1556,9 @@ describe('PlatformBibleToolbar project selector label', () => {
     // jsdom lays nothing out, so the clipped state the truncation tooltip keys off has to be stated.
     Object.defineProperty(errorLabel, 'scrollWidth', { configurable: true, value: 400 });
     Object.defineProperty(errorLabel, 'clientWidth', { configurable: true, value: 100 });
-    fireEvent.pointerEnter(errorLabel);
+    // `pointerover`, not `pointerenter`: the label reads hover from the whole trigger button, and
+    // only the bubbling event reaches it from the text.
+    fireEvent.pointerOver(errorLabel);
 
     await waitFor(() => {
       expect(screen.getAllByText('Project failed to load').length).toBeGreaterThan(1);

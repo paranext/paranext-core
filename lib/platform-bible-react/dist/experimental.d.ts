@@ -5,7 +5,7 @@ import { DblResourceData, LanguageStrings, LocalizeKey, Localized, MenuItemConta
 import { ALL_BOOK_IDS, ForwardedPaletteKeyEvent, PaletteDriver, PaletteKeyForwarding } from 'platform-bible-utils/experimental';
 import { DropdownMenu as DropdownMenuPrimitive } from 'radix-ui';
 import React$1 from 'react';
-import { MouseEventHandler, MutableRefObject, ReactNode, RefObject } from 'react';
+import { MouseEventHandler, MutableRefObject, PropsWithChildren, ReactNode, RefObject } from 'react';
 
 type ClassValue = ClassArray | ClassDictionary | string | number | bigint | null | boolean | undefined;
 type ClassDictionary = Record<string, any>;
@@ -2080,9 +2080,88 @@ export type ShortcutKeysProps = {
  * It does not detect the operating system: it follows the spelling of the hint it is given, so the
  * caller picks the spelling for the user's OS (e.g. `isMacOs() ? '⌘Z' : 'Ctrl+Z'`).
  *
+ * Hovering the keycaps shows a tooltip that reads the shortcut out ("Press Control and +"), using
+ * the strings from the nearest `ShortcutKeysLocalizedStringsProvider`. There is no tooltip inside
+ * another tooltip's content, where it could not open, or until the strings have loaded.
+ *
  * @experimental This component is unstable and may change or disappear without notice
  */
 export declare function ShortcutKeys({ hint }: ShortcutKeysProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * Object containing all keys used for localization in `ShortcutKeys`. Platform.Bible localizes them
+ * and gives them to every `ShortcutKeys` through {@link ShortcutKeysLocalizedStringsProvider}, so a
+ * caller in the app never passes them.
+ *
+ * @experimental This export is unstable and may change or disappear without notice
+ */
+export declare const SHORTCUT_KEYS_STRING_KEYS: readonly [
+	"%shortcutKeys_tooltip%"
+];
+/**
+ * Localized strings for `ShortcutKeys`, keyed by {@link SHORTCUT_KEYS_STRING_KEYS}.
+ * `%shortcutKeys_tooltip%` must contain `{keys}`, which is replaced by the keys to press.
+ *
+ * @experimental This type is unstable and may change or disappear without notice
+ */
+export type ShortcutKeysLocalizedStrings = {
+	[key in (typeof SHORTCUT_KEYS_STRING_KEYS)[number]]?: string;
+};
+/**
+ * Props for {@link ShortcutKeysLocalizedStringsProvider}.
+ *
+ * @experimental This type is unstable and may change or disappear without notice
+ */
+export type ShortcutKeysLocalizedStringsProviderProps = React$1.PropsWithChildren<{
+	/** The localized strings every `ShortcutKeys` inside uses, keyed by `SHORTCUT_KEYS_STRING_KEYS` */
+	localizedStrings: ShortcutKeysLocalizedStrings;
+	/**
+	 * BCP 47 tag of the language `localizedStrings` are in, so the keys are joined into a list ("…
+	 * and N") in that same language. Defaults to the runtime's own locale, which can differ from the
+	 * interface language.
+	 */
+	locale?: string;
+}>;
+/**
+ * Gives every `ShortcutKeys` inside the strings for its tooltip. Platform.Bible provides it at the
+ * root of the main window and of every web view, so components and extensions in the app never pass
+ * the strings themselves, whichever copy of `platform-bible-react` they use; use it only where this
+ * library renders outside the app, such as in Storybook.
+ *
+ * @experimental This component is unstable and may change or disappear without notice
+ */
+export declare function ShortcutKeysLocalizedStringsProvider({ localizedStrings, locale, children, }: ShortcutKeysLocalizedStringsProviderProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * Names of the contexts {@link getSharedContext} keeps, each stored on `globalThis` under
+ * `Symbol.for('platform-bible-react.context.<name>')`.
+ *
+ * An extension's web view bundles its own copy of `platform-bible-react`, while the platform
+ * renders the providers for these contexts from its own copy. A plain `createContext` would give
+ * each copy a separate context, so a provider the platform renders would never reach a component
+ * from an extension's copy. Platform.Bible copies these slots from the main window into each web
+ * view's frame before the web view's code runs, so every copy finds the same context.
+ *
+ * The value each context holds is shared between copies built from different versions of this
+ * library, so a change to its shape must stay readable by older and newer copies;
+ * `shared-context.util.test.tsx` pins the names and shapes so such a change shows in review. Only
+ * this library and Platform.Bible write these slots; an extension must not.
+ *
+ * @experimental This export is unstable and may change or disappear without notice
+ */
+export declare const SHARED_CONTEXT_NAMES: readonly [
+	"inTooltip",
+	"shortcutKeysLocalization"
+];
+/** One of {@link SHARED_CONTEXT_NAMES} */
+export type SharedContextName = (typeof SHARED_CONTEXT_NAMES)[number];
+/**
+ * Gets the `globalThis` key a shared context is stored under. Platform.Bible uses it to copy the
+ * slots into each web view's frame; extensions do not need it.
+ *
+ * @param name The shared context's name
+ * @returns The `Symbol.for` key of its slot
+ * @experimental This function is unstable and may change or disappear without notice
+ */
+export declare function getSharedContextKey(name: SharedContextName): symbol;
 /**
  * Names (lucide kebab-case) of the icons `LucideIcon` can render
  *
