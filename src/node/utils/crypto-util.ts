@@ -42,3 +42,11 @@ export function generateHashFromBuffer(
   hashAlgo.update(buffer);
   return hashAlgo.digest(encodingType);
 }
+
+/**
+ * SHA-256 digest of a string's UTF-8 bytes. Two digests are the same length whatever the inputs, so
+ * they can be compared with `crypto.timingSafeEqual`.
+ */
+export function sha256Digest(value: string): Buffer {
+  return crypto.createHash('sha256').update(value, 'utf8').digest();
+}

@@ -134,7 +134,7 @@ test.use({
   // is a modal that aria-hides the app. DEV_NOISY=false gives the window the single-Home-tab layout.
   interfaceMode: 'power',
   seedSettings: { 'platform.firstRunComplete': true },
-  electronLaunchOptions: { isolatedProjectRoot: true, envOverrides: { DEV_NOISY: 'false' } },
+  electronLaunchOptions: { isolatedProjectRoot: true },
 });
 
 test.describe('middle-click tab close', () => {

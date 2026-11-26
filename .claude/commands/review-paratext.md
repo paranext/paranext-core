@@ -12,7 +12,7 @@ This command:
 
 1. Analyzes all changes on your branch since it diverged from the base branch
 2. Runs four parallel analysis passes (API/correctness, style/patterns, coverage/compliance, UX design guide)
-3. Interviews you about the changes to verify understanding and surface issues
+3. Interviews you about the changes to verify understanding and surface issues, including which end-to-end tests to run and whether the change needs a new one
 4. Writes `.review/summary.md` with findings and interview notes
 5. Optionally creates or updates a PR with the summary as the description
 
@@ -104,13 +104,33 @@ Run this entire block as a **single bash command** so that `BASE_BRANCH` flows d
 ```bash
 git fetch origin --quiet 2>/dev/null || true
 
-MAIN_MERGE_BASE=$(git merge-base origin/main HEAD 2>/dev/null || echo "")
+# A branch with an open pull request is reviewed against that pull request's base (a stacked branch
+# targets its parent branch, not main); otherwise the base is origin/main.
+CURRENT_BRANCH=$(git branch --show-current)
+PR_BASE=""
+# A detached HEAD has no branch name, and an empty --head would match any open pull request.
+if [ -n "$CURRENT_BRANCH" ]; then
+  PR_BASE=$(gh pr list --head "$CURRENT_BRANCH" --state open --json baseRefName,isCrossRepository --jq '[.[] | select(.isCrossRepository | not)][0].baseRefName // empty' 2>/dev/null || echo "")
+fi
+if [ -n "$PR_BASE" ]; then
+  git fetch origin --quiet --end-of-options "$PR_BASE" 2>/dev/null || true
+  CANDIDATE_BASE="origin/$PR_BASE"
+else
+  CANDIDATE_BASE="origin/main"
+fi
 
-if [ -z "$MAIN_MERGE_BASE" ]; then
-  echo "BASE_BRANCH=UNKNOWN"
+CANDIDATE_MERGE_BASE=$(git merge-base "$CANDIDATE_BASE" HEAD 2>/dev/null || echo "")
+# A pull request base that cannot be resolved (deleted after its own merge, say) falls back to main.
+if [ -z "$CANDIDATE_MERGE_BASE" ] && [ "$CANDIDATE_BASE" != "origin/main" ]; then
+  CANDIDATE_BASE="origin/main"
+  CANDIDATE_MERGE_BASE=$(git merge-base "$CANDIDATE_BASE" HEAD 2>/dev/null || echo "")
+fi
+
+if [ -z "$CANDIDATE_MERGE_BASE" ]; then
+  BASE_BRANCH="UNKNOWN"
   echo "ERROR: Could not detect base branch — will ask author"
 else
-  BASE_BRANCH="origin/main"
+  BASE_BRANCH="$CANDIDATE_BASE"
 fi
 
 echo "BASE_BRANCH=$BASE_BRANCH"
@@ -318,15 +338,80 @@ Record the author's responses as `MINOR_FINDINGS_RESPONSE` (e.g., "Author said n
 
 **Complete this step and receive the author's response(s) before proceeding to Step 3.5.**
 
-### Step 3.5 — Wrap-up
+### Step 3.5 — End-to-end tests
 
-Ask (as a separate question, after receiving the response to Step 3.4):
+Run, as a single bash command, substituting the literal `MERGE_BASE` SHA stored in Step 1.3 for `<MERGE_BASE>` (shell variables do not persist between bash calls; an empty value makes the command print a usage error):
+
+```bash
+npx tsx "$(git rev-parse --show-toplevel)/e2e-tests/e2e-recommendations.ts" <MERGE_BASE>
+```
+
+It prints a JSON report with these fields:
+
+- `recommendations`: isolated e2e keys whose specs exist to test the changed files, each with its `key`, `command`, `matchedFiles` and `ci`.
+- `alsoExercised`: keys whose specs only drive the changed files along the way, each with its `key` and `matchedFiles`.
+- `uncoveredFiles`: changed, existing runtime files under `src/`, `extensions/src/` and `c-sharp/` that no key lists; only files under those three roots are listed, so an extension's own webpack or PostCSS configuration under `extensions/src/` is listed when no key names it, while the top-level build configuration is not. Files that hold no code a key could list (tests, stories, docs, licenses, tool configuration, package, TypeScript and .NET project metadata except the data provider's own `c-sharp/ParanextDataProvider.csproj`, image and icon assets; `NON_RUNTIME` in `e2e-tests/e2e-recommendations.ts`) are never listed, and neither are `localizedStrings.json` files (keys can still list them, since e2e locators use visible text). A `lib/` file is never listed here: a `lib/` change reaches you only through the keys that name it, or through the Add part's third condition.
+- `entryPointFiles`: changed menu, web view provider and command or request handler registration files.
+- `specsChanged`: whether the branch changes an e2e spec or its support code: any file under `e2e-tests/tests/` or `e2e-tests/fixtures/`, any `.ts` file under `e2e-tests/reporters/`, the global setup or teardown, a Playwright config, `e2e-tests/scoped-cleanup.ts`, `e2e-tests/parked-enhanced-resources.ts`, `e2e-tests/run-isolated.mjs` or `e2e-tests/run-e2e-wsl.sh`, except unit tests, Markdown files and `e2e-tests/tests/isolated/subset-sources.json`.
+- `stalePrefixes`: paths in the map (`e2e-tests/tests/isolated/subset-sources.json`) that match no tracked file, because a source was moved or deleted.
+- `editorListRuns`: whether the changed files make CI run the editor spec list too on this branch's pull request: `true`, `false`, or `'unknown'` when the CI path list could not be read.
+
+If the command exits non-zero or prints no report, say so in one line, record `E2E_TEST_NOTES` as "not checked: <error>", skip the rest of this step and go on to Step 3.6 without waiting. A warning on stderr together with a printed report is not a failure: use the report. Ignore anything under `.review/` and any file that Step 1.2 classed as worktree noise in every list of the report.
+
+This step never starts a test run and never blocks the review. It prints a stale-prefix warning, a full-run pointer and the also-exercised line (none of them a question), and asks at most two questions: the Run question, then the Add question. Print everything up to the first question in one message, in this order: the stale-prefix warning if any, the full-run pointer if any, the list of recommended keys, the also-exercised line if any, then the Run question if the Run part applies. If the Run question was asked, wait for the author's response; then, if the Add part applies, ask the Add question as a separate message and wait again. If the Run part does not apply but the Add part does, put the Add question at the end of that first message and wait. If neither question applies, print what applies and go on to Step 3.6 without waiting. If nothing applies (no warning, pointer, recommendation, also-exercised line or Add question), print nothing and leave `E2E_TEST_NOTES` empty (the summary then gets no heading); a branch where only the full-run pointer applies prints that one line and leaves `E2E_TEST_NOTES` empty. A branch that changes only e2e specs or their support code gets no recommendation, not even for the specs it changed: the map lists app source, not specs.
+
+**Stale-prefix warning** (printed, no question) — applies when `stalePrefixes` is non-empty: print one line, "The e2e map names files that no longer exist: <prefixes>. Please update `e2e-tests/tests/isolated/subset-sources.json`." Record it in `E2E_TEST_NOTES` as "map warning: <prefixes>".
+
+**Full-run pointer** (printed, no question, not recorded) — applies, whether or not anything else in this step applies, when any of these include a dependency file (a `package.json` or `package-lock.json` at the root or under `release/app/`, `dev-packages.json`, `global.json`, a `.csproj` or `.props` under `c-sharp/`, or a patch under `patches/`):
+
+- Step 1.3's list of changed files, after the worktree-noise exclusion.
+- The branch's commits (`git diff --name-only <MERGE_BASE> HEAD`, which a lock file's uncommitted name rewrite never reaches).
+- Its untracked files (`git ls-files --others --exclude-standard`, such as a new patch).
+
+Then print one line: "This branch changes dependency files; `npm run test:e2e:isolated all` runs the whole isolated suite (about an hour), and CI runs it nightly on `main`."
+
+**Run part** (a question) — applies when `recommendations` is non-empty. List each key with its `command` and its CI status in words, from `ci` (when `BASE_BRANCH` without its `origin/` prefix matches none of the branch names or patterns in the `pull_request` `branches` filter of `.github/workflows/test.yml`, CI's pull-request workflow does not run for this branch yet: say the CI status applies once its pull request targets one of them, normally `main`; skip this note when the author named the base by hand):
+
+- `kind: 'spec'`, `coreList: 'always'` → "also runs in CI on every pull request"
+- `kind: 'spec'`, `coreList: 'editor'` → "runs in CI only on pull requests that touch the Scripture editor (see 'What CI runs' in `e2e-tests/CLAUDE.md`)", then add, from `editorListRuns`, ", so it runs in CI for this branch" (`true`), ", so it does not run in CI for this branch" (`false`) or " (could not tell whether CI runs the editor list for this branch)" (`'unknown'`)
+- `kind: 'spec'`, `coreList: 'none'` → "is in neither pull-request list (see 'What CI runs' in `e2e-tests/CLAUDE.md`)"
+- `kind: 'subset'` → "CI runs `alwaysCoreSpecCount` of its `specCount` spec files on every pull request (see 'What CI runs' in `e2e-tests/CLAUDE.md`)". When `editorCoreSpecCount` is above 0, add "plus `editorCoreSpecCount` on pull requests that touch the Scripture editor" and then, from `editorListRuns`, "and this branch's pull request does" (`true`), "and this branch's pull request does not" (`false`) or "(could not tell whether CI runs the editor list for this branch)" (`'unknown'`); when it is 0, add neither. When `specCount` is 0 the spec list is unknown: say the spec count is unknown instead of "0 of 0". For example: "CI runs 2 of its 3 spec files on every pull request" (`editorCoreSpecCount` 0); "CI runs 4 of its 20 spec files on every pull request, plus 6 on pull requests that touch the Scripture editor, and this branch's pull request does" (`editorCoreSpecCount` 6, `editorListRuns` true)
+
+A recommendation whose `key` is a path prefix inside a subset (no `.spec.ts` ending, no `memberKeys`) runs every spec starting with that prefix: list it once like a subset, with `ci.specCount` as the number of specs it runs. A recommendation with `memberKeys` is several specs of one subset that matched the same files, collapsed into one command (its `key` is a path prefix that runs them all). List it once, as one item, say how many specs it runs (`ci.specCount`) with the same CI wording, and name the member keys only in the summary.
+
+Then ask:
+
+> "The isolated e2e tests above cover files you changed. Did you run them? (ran and passed / ran and failed / not run, and why)"
+
+Record each key as "<key>: ran, passed", "<key>: ran, failed: <what>" or "<key>: not run: <reason>". For a collapsed item, record one line for the item and name its `memberKeys` beside it.
+
+**Also-exercised line** (no question) — applies when `alsoExercised` is non-empty whether or not `recommendations` is: print one line naming those keys: "These also open the code you changed, if you want to run more: <keys>."
+
+**Add part** (a question) — applies only when `specsChanged` is false (any changed e2e spec, page object, fixture or spec helper suppresses the question) and, judged from the diff, the branch changes what the app does (not only documentation, tests, stories, tooling or CI), and then only when at least one of these holds:
+
+1. `uncoveredFiles` is non-empty: name those files in the question.
+2. `entryPointFiles` is non-empty and the diff shows an entry point was **added** (a new menu item, web view provider or command registration), not only edited.
+3. Reading the diff against [E2E Testing — Intended Use](../../.context/standards/Testing-Guide.md#e2e-testing), a changed area's user-visible or cross-process behaviour (a `lib/` file included, whether or not a key names it) changed in a way no matched spec exercises. Name that behaviour in the question.
+
+Never ask it for a behaviour-keeping refactor, a docs-only or tests-only change, or a library-only change with no new behaviour. Ask:
+
+> "Does this change need a new or extended e2e test? [the files, entry point or behaviour that triggered the question]"
+
+Record the answer as "added: <spec>", "extended: <spec>", "not needed: <reason>" or "to do: <where it is tracked>".
+
+Store the answers as `E2E_TEST_NOTES` for the output phase.
+
+**Complete this step, and receive the author's response to each question it asked, before proceeding to Step 3.6.**
+
+### Step 3.6 — Wrap-up
+
+Ask (as a separate question, after receiving the response to Step 3.5, or to Step 3.4 when Step 3.5 asked nothing):
 
 > "Is there anything else you want to flag or discuss before I write up the summary? Any tradeoffs you made, things you're uncertain about, or context a reviewer should know?"
 
 Record the author's response.
 
-### Step 3.6 — Collect interview notes
+### Step 3.7 — Collect interview notes
 
 Synthesize from the conversation:
 
@@ -338,7 +423,7 @@ Synthesize from the conversation:
 - **Areas the author did not understand or deferred to AI**: if the author said something like "the AI handled it", "I'm not sure how this works", or could not explain a section, list those areas explicitly as "Author does not understand: [area]". Do NOT reframe this as satisfaction or acceptance.
 - Any additional context the author volunteered
 
-Store as `INTERVIEW_NOTES` for the output phase.
+Store as `INTERVIEW_NOTES` for the output phase. Leave the end-to-end test answers (`E2E_TEST_NOTES`) out of it: Step 4.2 writes them to their own section.
 
 ---
 
@@ -395,7 +480,7 @@ If there are unfixable failures, notify the author before proceeding:
 
 ### Step 4.2 — Write .review/summary.md
 
-Always write a completely fresh `.review/summary.md` — never read and merge with any existing file. Use the Write tool to create or overwrite `.review/summary.md` with this structure, filling in all values from the analysis and interview. Use `MERGED_FINDINGS` for the Findings sections, `TEMPLATE_PROPAGATION` for the Template Propagation section, `POSITIVE_OBSERVATIONS` for the Positive Observations section, `INTERVIEW_NOTES` for the Interview Notes section, and `QUALITY_CHECK_RESULTS` for the In-Review Quality Check section (omit that section if Step 4.1 was skipped):
+Always write a completely fresh `.review/summary.md` — never read and merge with any existing file. Use the Write tool to create or overwrite `.review/summary.md` with this structure, filling in all values from the analysis and interview. Use `MERGED_FINDINGS` for the Findings sections, `TEMPLATE_PROPAGATION` for the Template Propagation section, `POSITIVE_OBSERVATIONS` for the Positive Observations section, `E2E_TEST_NOTES` for the End-to-end tests section (omit that section when it is empty), `INTERVIEW_NOTES` for the Interview Notes section, and `QUALITY_CHECK_RESULTS` for the In-Review Quality Check section (omit that section if Step 4.1 was skipped):
 
 ```markdown
 # Code Review Summary
@@ -466,6 +551,16 @@ Include **ALL** findings in each section — open, dismissed, and fixed.
 
 - [ ] `file` — propagate to `repo`
 - [n/a] `file` — extension-specific, no propagation needed
+
+## End-to-end tests
+
+[Only present when `E2E_TEST_NOTES` is not empty. It can also hold a single "not checked: <error>"
+line when the recommendations command could not run. Otherwise, one bullet per line recorded in
+`E2E_TEST_NOTES`: the map warning if any, each
+recommended key with its recorded answer ("ran, passed", "ran, failed: …", "not run: …") and, for a collapsed item, its member keys;
+then the add-part answer
+("added: …", "extended: …", "not needed: …", "to do: …") if it was asked. Omit this heading
+entirely otherwise.]
 
 ## Positive Observations
 

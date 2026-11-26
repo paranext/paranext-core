@@ -48,7 +48,6 @@ const MAX_NARROWING_STEPS = 40;
 
 test.use({
   interfaceMode: 'power',
-  electronLaunchOptions: { envOverrides: { DEV_NOISY: 'false' } },
   seedSettings: {
     'platform.firstRunComplete': true,
     [CONTENT_ZOOM_SETTING]: 1,

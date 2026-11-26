@@ -384,6 +384,25 @@ export type ImportedPackage = {
 };
 
 /**
+ * Folders whose files exist only to serve tests: mocks, the fixtures that
+ * `paratext-bible-internal-extensions` keeps in `__test-fixtures__` (which import `vitest`), the
+ * setup files and stubs that `paratext-assistant` keeps in `test-utils` (which import `vitest` and
+ * `@testing-library/*`), and `__tests__`, which Jest's default `testMatch` treats as test code
+ * throughout. `test-utils` is the folder form of the `*.test-utils.*` file name below. Helpers in
+ * `__tests__` often miss that name: this repository's `src/main/services/__tests__/` has
+ * `service-router-test.util.ts` and `message-port-main-shim.test.util.ts`.
+ *
+ * `testing` is deliberately absent: `src/renderer/testing/` holds renderer panels that ship.
+ */
+const TEST_SUPPORT_FOLDERS = new Set([
+  '__mocks__',
+  '__fixtures__',
+  '__test-fixtures__',
+  '__tests__',
+  'test-utils',
+]);
+
+/**
  * Third-party packages that first-party SOURCE imports at runtime, read from the source itself.
  *
  * The second source `missingDirectDependencies` cannot be. That guard reads `dependencies` only, on
@@ -427,20 +446,31 @@ export type ImportedPackage = {
  * stylesheet leaf scan that puts them in the set in the first place, plus the byte-comparison
  * against the committed artifact - which catches a regression in an existing row rather than the
  * omission of a new one.
+ *
+ * `extensionCheckout` reads an extension repository's checkout instead, whose shipped source is its
+ * extensions' source folders alone (`extensionSourceRoots`).
  */
-export function importedPackages(repo: string): ImportedPackage[] {
+export function importedPackages(
+  repo: string,
+  { extensionCheckout = false }: { extensionCheckout?: boolean } = {},
+): ImportedPackage[] {
   const repoReal = realPathOf(repo);
-  const roots = [
-    path.join(repo, 'src'),
-    ...workspaceGlobBases(repo).flatMap((base) => childSourceRoots(path.join(repo, base))),
-  ].filter((root) => fs.existsSync(root));
+  // An extension checkout reads its extensions' source and nothing else - see
+  // `extensionSourceRoots` for the two layouts that means.
+  const roots = extensionCheckout
+    ? extensionSourceRoots(repo)
+    : [
+        path.join(repo, 'src'),
+        ...workspaceGlobBases(repo).flatMap((base) => childSourceRoots(path.join(repo, base))),
+      ].filter((root) => fs.existsSync(root));
 
   const found = new Map<string, ImportedPackage>();
   roots.forEach((root) => {
     findPrebuiltSources(root)
       // Test SUPPORT files, on top of the ones `findPrebuiltSources` already drops. A helper named
-      // `*.test-utils.ts` or `*.test-harness.tsx`, or one sitting in `__mocks__`, is imported only
-      // by tests and bundled by nothing, so the packages it reaches (`vitest`, here) ship nowhere.
+      // `*.test-utils.ts` or `*.test-harness.tsx`, or one sitting in a `TEST_SUPPORT_FOLDERS`
+      // folder, is imported only by tests and bundled by nothing, so the packages it reaches
+      // (`vitest`, here) ship nowhere.
       // The whole convention is named here even where `findPrebuiltSources` already covers part of
       // it: this filter and that one answer the SAME question about the same corpus, and where they
       // disagree the omission guard corroborates a row the shipping set should not be carrying
@@ -448,10 +478,15 @@ export function importedPackages(repo: string): ImportedPackage[] {
       // `.test-utils.` is filtered here rather than in `findPrebuiltSources`, which also feeds the
       // shipping set: narrowing that would REMOVE rows from the notices document, which is the
       // direction this pipeline refuses to take on a guess.
+      // The folders are matched below the scanned root only: a repository that itself lives under a
+      // folder named `__fixtures__` must not have every file it holds dropped from the guard.
       .filter(
         (file) =>
           !/\.test-(?:utils?|harness)\./.test(path.basename(file)) &&
-          !file.split(path.sep).includes('__mocks__'),
+          !path
+            .relative(root, file)
+            .split(path.sep)
+            .some((segment) => TEST_SUPPORT_FOLDERS.has(segment)),
       )
       .forEach((file) => {
         runtimeModuleSpecifiers(fs.readFileSync(file, 'utf8'), file).forEach((specifier) => {
@@ -1323,7 +1358,7 @@ function firstPartyStylesheetSpecifier(specifier: string, fromDir: string): bool
 }
 
 /** The package a module specifier names, or `undefined` when it names something else. */
-function packageOfSpecifier(specifier: string): string | undefined {
+export function packageOfSpecifier(specifier: string): string | undefined {
   const bare = specifier.split('?')[0];
   // A relative or absolute specifier names first-party source, never a package. Tested before the
   // pattern below, which allows `.` inside a name (`lodash.merge`) and so would otherwise read
@@ -1353,6 +1388,26 @@ function childSourceRoots(dir: string): string[] {
 }
 
 /**
+ * The folders holding an extension checkout's shipped source, in either of the two layouts the
+ * extension templates produce.
+ *
+ * - Paranext-multi-extension-template declares `workspaces` (`src/*`), and each extension's source is
+ *   its own `src/<extension>/src`. The checkout's own `src/` is not read whole: an extension's
+ *   build tooling beside its `src/` does not ship.
+ * - Paranext-extension-template declares no `workspaces`, and the one extension IS the checkout:
+ *   `src/main.ts` is the extension and `src/tailwind.css` its stylesheet, so its own `src/` is the
+ *   source root. Without this case the stylesheet scan and the import cross-check would read
+ *   nothing there - the first refusing the checkout, the second passing it unchecked.
+ */
+export function extensionSourceRoots(repo: string): string[] {
+  const roots =
+    rootWorkspacePatterns(repo).length === 0
+      ? [path.join(repo, 'src')]
+      : workspaceGlobBases(repo).flatMap((base) => childSourceRoots(path.join(repo, base)));
+  return roots.filter((root) => fs.existsSync(root));
+}
+
+/**
  * The production source roots the module manifests cover, for the stylesheet scan to mirror.
  *
  * `lib/*` is in the list for the same reason `extensions/src/*` is, and leaving it out is a real
@@ -1370,8 +1425,12 @@ function childSourceRoots(dir: string): string[] {
  * electron` are build-time tooling, so a stylesheet there would be over-reported. That is the safe
  * direction and a visible one (a new row in the committed artifact), unlike the under-report it
  * closes, and neither ships a stylesheet today.
+ *
+ * An extension checkout's roots are its extensions' source folders instead
+ * (`extensionSourceRoots`), the same ones its import cross-check reads.
  */
-function productionStylesheetRoots(repo: string): string[] {
+function productionStylesheetRoots(repo: string, extensionCheckout: boolean): string[] {
+  if (extensionCheckout) return extensionSourceRoots(repo);
   const coreRoots = ['main', 'renderer', 'extension-host', 'shared', 'node', 'client'].map((name) =>
     path.join(repo, 'src', name),
   );
@@ -1447,7 +1506,10 @@ function resolvePackageLeaf(name: string, fromDir: string, repo: string): string
  * `packageOfSpecifier`'s filtering) but did not resolve against any installed `node_modules`
  * directory - see `resolvePackageLeaf` for why that is surfaced rather than thrown or dropped.
  */
-function collectStylesheetLeaves(repo: string): { leaves: Leaf[]; unresolvedNames: string[] } {
+function collectStylesheetLeaves(
+  repo: string,
+  extensionCheckout: boolean,
+): { leaves: Leaf[]; unresolvedNames: string[] } {
   const leaves: Leaf[] = [];
   const unresolvedNames = new Set<string>();
   const repoReal = realPathOf(repo);
@@ -1471,7 +1533,7 @@ function collectStylesheetLeaves(repo: string): { leaves: Leaf[]; unresolvedName
     else if (!dir) unresolvedNames.add(name);
   };
 
-  productionStylesheetRoots(repo).forEach((root) => {
+  productionStylesheetRoots(repo, extensionCheckout).forEach((root) => {
     findStylesheets(root).forEach((file) => {
       const text = fs.readFileSync(file, 'utf8');
       const fromDir = path.dirname(file);
@@ -1700,6 +1762,11 @@ type ManifestScan = {
   byDir: Map<string, Set<string>>;
   /** Module paths under `node_modules` whose package directory could not be read. */
   unresolved: Set<string>;
+  /**
+   * The package folders of modules that live in the linked repository, sorted. Empty when no linked
+   * repository was given.
+   */
+  linkedPackageDirs: string[];
   /** Build id -> the bundles stamped with it. */
   stamps: Map<string, string[]>;
   /** Webpack mode -> the required bundles compiled in it. */
@@ -1712,9 +1779,14 @@ type ManifestScan = {
 
 /**
  * The module manifests in `manifestDir`, refused unless every required bundle is present and
- * carries a non-empty module list.
+ * carries a non-empty module list - or an empty one that `bundleMayBeEmpty` accepts for that
+ * bundle.
  */
-function readManifestFiles(manifestDir: string, requiredBundles: string[]): string[] {
+function readManifestFiles(
+  manifestDir: string,
+  requiredBundles: string[],
+  bundleMayBeEmpty: (bundle: string) => boolean,
+): string[] {
   const files = fs.existsSync(manifestDir)
     ? fs.readdirSync(manifestDir).filter((f) => f.endsWith('.json'))
     : [];
@@ -1742,13 +1814,17 @@ function readManifestFiles(manifestDir: string, requiredBundles: string[]): stri
   // observe the compilation - never that the bundle genuinely contains nothing. Checked for the
   // REQUIRED bundles only, for the same reason the check above is: a fixture may legitimately
   // declare a bundle with nothing in it.
+  // The one exception is the caller's to make, through `bundleMayBeEmpty`, and only where it has
+  // evidence of its own that the bundle had nothing to compile: an extension checkout with no
+  // `*.web-view.tsx` file builds a web-view bundle with no entries (see `hasWebViewSource`).
+  // A manifest with no `modules` array is refused regardless.
   const emptyBundles = requiredBundles
     .filter((bundle) => {
       const { modules } = readJsonFile<ModuleManifest>(
         path.join(manifestDir, `${bundle}.json`),
         'a webpack module manifest',
       );
-      return !Array.isArray(modules) || modules.length === 0;
+      return !Array.isArray(modules) || (modules.length === 0 && !bundleMayBeEmpty(bundle));
     })
     .sort(compareStrings);
   if (emptyBundles.length)
@@ -1770,15 +1846,19 @@ function readModuleManifests({
   files,
   manifestDir,
   repo,
+  linkedRepo,
   requiredBundles,
 }: {
   files: string[];
   manifestDir: string;
   repo: string;
+  linkedRepo?: string;
   requiredBundles: string[];
 }): ManifestScan {
   const byDir = new Map<string, Set<string>>();
   const unresolved = new Set<string>();
+  const linkedDirs = new Set<string>();
+  const outsideBoth = new Set<string>();
   const stamps = new Map<string, string[]>();
   const modes = new Map<string, string[]>();
   const warmBundles: string[] = [];
@@ -1792,6 +1872,9 @@ function readModuleManifests({
   // Resolved once: every module path the manifests carry is respelled against this, so a repository
   // reached through a symlink is not read as a tree of modules that live outside itself.
   const repoReal = realPathOf(repo);
+  // The linked repository is usually reached through a junction (an extension's `file:` link into
+  // paranext-core), and webpack reports the junction's target, so it is respelled the same way.
+  const linkedReal = linkedRepo ? realPathOf(linkedRepo) : undefined;
 
   files.forEach((file) => {
     const { bundle, buildId, mode, cacheWarm, modules } = readJsonFile<ModuleManifest>(
@@ -1817,16 +1900,34 @@ function readModuleManifests({
     // manifests - two manifests that each fail to say which build they came from are not evidence
     // that they came from the SAME one.
     // Only the REQUIRED bundles are placed on the mode check: a fixture manifest, or one left
-    // behind by a renamed bundle, says nothing about what the application is compiled as.
-    if (requiredBundles.includes(bundle))
-      modes.set(mode || 'unrecorded', [...(modes.get(mode || 'unrecorded') || []), bundle]);
+    // behind by a renamed bundle, says nothing about what the application is compiled as. Which
+    // bundle a manifest is comes from its file name, as `readManifestFiles` found it, not from the
+    // `bundle` field it records: a manifest whose field is missing or names another bundle would
+    // otherwise escape the check.
+    const fileBundle = file.slice(0, -'.json'.length);
+    if (requiredBundles.includes(fileBundle))
+      modes.set(mode || 'unrecorded', [...(modes.get(mode || 'unrecorded') || []), fileBundle]);
     stamps.set(buildId || `unstamped:${bundle}`, [
       ...(stamps.get(buildId || `unstamped:${bundle}`) || []),
       bundle,
     ]);
     if (cacheWarm) warmBundles.push(bundle);
     modules.forEach((rawResource) => {
-      const resource = inRepoSpelling(rawResource, repo, repoReal);
+      let resource = inRepoSpelling(rawResource, repo, repoReal);
+      if (linkedRepo && linkedReal && !containedPath(repo, resource)) {
+        resource = inRepoSpelling(rawResource, linkedRepo, linkedReal);
+        if (!containedPath(linkedRepo, resource)) {
+          outsideBoth.add(rawResource);
+          return;
+        }
+        const linkedDir = packageDirOf(resource, linkedRepo);
+        if (linkedDir) linkedDirs.add(linkedDir);
+        // Like first-party source in `repo`, a linked module outside any package is ignored; an
+        // installed path with no readable package.json is a degraded tree and must not shrink the
+        // document.
+        else if (isInstalledPath(resource)) unresolved.add(resource);
+        return;
+      }
       const inLib = containedPath(libRoot, resource);
       if (inLib) shippedLibNames.add(path.relative(libRoot, inLib).split(path.sep)[0]);
       const dir = packageDirOf(resource, repo);
@@ -1843,7 +1944,24 @@ function readModuleManifests({
     });
   });
 
-  return { byDir, unresolved, stamps, modes, warmBundles, shippedLibNames };
+  if (linkedRepo && outsideBoth.size > 0)
+    throw new Error(
+      `${outsideBoth.size} bundled module(s) are outside both ${repo} and ${linkedRepo}, so they ` +
+        'cannot be attributed to either repository:\n' +
+        `${[...outsideBoth].slice(0, 5).join('\n')}\n` +
+        'Check that the linked repository passed to the generator is the one the extension links ' +
+        'to, then rebuild: rm -rf .notices && npm run build',
+    );
+
+  return {
+    byDir,
+    unresolved,
+    linkedPackageDirs: [...linkedDirs].sort(compareStrings),
+    stamps,
+    modes,
+    warmBundles,
+    shippedLibNames,
+  };
 }
 
 /**
@@ -1880,6 +1998,32 @@ function refuseWarmCacheManifests(warmBundles: string[], warmCache: 'throw' | 'r
         'Delete the cache and rebuild: rm -rf node_modules/.cache/webpack-* && npm run build',
     );
   }
+}
+
+/**
+ * Refuses a required bundle compiled in any webpack mode other than `requiredMode`, listing each
+ * such bundle with the mode its manifest records.
+ *
+ * The mixed-mode refusal in `assertOneBuildGraph` cannot catch a set that agrees on the wrong mode:
+ * two development manifests agree with each other. A mixed set always holds a bundle in some other
+ * mode, so this runs first and names exactly the bundles to rebuild.
+ */
+function refuseOtherModes(
+  manifestDir: string,
+  modes: Map<string, string[]>,
+  requiredMode: string,
+): void {
+  const otherModes = [...modes.entries()]
+    .filter(([mode]) => mode !== requiredMode)
+    .flatMap(([mode, bundles]) => bundles.map((bundle) => `  ${bundle}: ${mode}`))
+    .sort(compareStrings);
+  if (otherModes.length)
+    throw new Error(
+      `the module manifests in ${manifestDir} were not written by a ${requiredMode} build:\n` +
+        `${otherModes.join('\n')}\n` +
+        `The installer packs what a ${requiredMode} build compiles, and a graph compiled in any ` +
+        'other mode can differ from it. Rebuild the bundles the way they ship.',
+    );
 }
 
 /**
@@ -1971,13 +2115,14 @@ function addLeafScannedPackages(
   byDir: Map<string, Set<string>>,
   repo: string,
   shippedLibNames: Set<string>,
+  extensionCheckout: boolean,
 ): string[] {
   // Union in the stylesheet leaf scan (see module docstring for why the module graph alone misses
   // these) - as LEAVES, so a package reached only through CSS never pulls its own dependencies in.
   // Both compensating scans, for the two things webpack's graph cannot see through: a stylesheet
   // pipeline that never enters a webpack compilation, and a `lib/*` package consumed as its own
   // prebuilt bundle. Same LEAF treatment for the same reason.
-  const stylesheet = collectStylesheetLeaves(repo);
+  const stylesheet = collectStylesheetLeaves(repo, extensionCheckout);
   const prebuiltLib = collectPrebuiltLibLeaves(repo, shippedLibNames);
   const leaves = [...stylesheet.leaves, ...prebuiltLib.leaves];
   const unresolvedNames = [
@@ -2053,30 +2198,60 @@ export function collectShippedPackages({
   requiredBundles = [],
   requireUnbundledClosure = false,
   warmCache = 'throw',
+  linkedRepo,
+  requiredMode,
+  extensionCheckout = false,
+  bundleMayBeEmpty = () => false,
 }: {
   manifestDir: string;
   repo: string;
+  /**
+   * A second repository whose installed packages the bundles also compile, reached through a
+   * `file:` link. Its packages are reported as `linkedPackageDirs`, not described here.
+   */
+  linkedRepo?: string;
   requiredBundles?: string[];
   requireUnbundledClosure?: boolean;
   warmCache?: 'throw' | 'report';
+  /**
+   * The webpack mode every required bundle's manifest must record. A manifest that records another
+   * mode, or none, is refused. Omitted, any one mode the set agrees on is accepted.
+   */
+  requiredMode?: string;
+  /**
+   * `repo` is an extension repository's checkout, whose stylesheets are read from its extensions'
+   * source folders (`extensionSourceRoots`) rather than from this repository's layout.
+   */
+  extensionCheckout?: boolean;
+  /**
+   * Whether a required bundle's manifest may carry an empty module list. Omitted, none may: an
+   * empty list means the plugin did not observe the compilation (see `readManifestFiles`).
+   */
+  bundleMayBeEmpty?: (bundle: string) => boolean;
 }): {
   packages: ShippedPackage[];
   unresolvedStylesheetSpecifiers: string[];
   warmBundles: string[];
+  linkedPackageDirs: string[];
 } {
-  const files = readManifestFiles(manifestDir, requiredBundles);
+  const files = readManifestFiles(manifestDir, requiredBundles, bundleMayBeEmpty);
 
-  const { byDir, unresolved, stamps, modes, warmBundles, shippedLibNames } = readModuleManifests({
-    files,
-    manifestDir,
-    repo,
-    requiredBundles,
-  });
+  const { byDir, unresolved, linkedPackageDirs, stamps, modes, warmBundles, shippedLibNames } =
+    readModuleManifests({
+      files,
+      manifestDir,
+      repo,
+      linkedRepo,
+      requiredBundles,
+    });
 
+  // Before the warm-cache check, so a wrong-mode set is refused for its mode rather than for its
+  // cache; and here at all, so `'report'` cannot hand a wrong-mode set back as merely warm.
+  if (requiredMode) refuseOtherModes(manifestDir, modes, requiredMode);
   refuseWarmCacheManifests(warmBundles, warmCache);
   assertOneBuildGraph({ manifestDir, stamps, modes, unresolved });
 
-  const unresolvedNames = addLeafScannedPackages(byDir, repo, shippedLibNames);
+  const unresolvedNames = addLeafScannedPackages(byDir, repo, shippedLibNames, extensionCheckout);
 
   return {
     packages: withUnbundledPackages(
@@ -2086,6 +2261,7 @@ export function collectShippedPackages({
     ),
     unresolvedStylesheetSpecifiers: unresolvedNames,
     warmBundles,
+    linkedPackageDirs,
   };
 }
 

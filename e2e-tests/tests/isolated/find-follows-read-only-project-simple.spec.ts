@@ -51,7 +51,6 @@ import {
 // seeded through the fixture rather than a preConfigureSettings call in a hook, which the fixture
 // would both override and then write back into the developer's shared settings.
 test.use({
-  electronLaunchOptions: { envOverrides: { DEV_NOISY: 'false' } },
   interfaceMode: 'simple',
   seedSettings: { 'platform.firstRunComplete': true },
 });

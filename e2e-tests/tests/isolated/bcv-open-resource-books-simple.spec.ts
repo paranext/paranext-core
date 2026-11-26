@@ -93,7 +93,6 @@ const BIBLE_TEXTS_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.bibleTexts';
 // precondition rather than inheriting one. The English interface language its selectors depend on
 // is seeded by the fixture itself.
 test.use({
-  electronLaunchOptions: { envOverrides: { DEV_NOISY: 'false' } },
   interfaceMode: 'simple',
   seedSettings: { 'platform.firstRunComplete': true },
 });

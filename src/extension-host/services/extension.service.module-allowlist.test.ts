@@ -9,17 +9,20 @@ import {
 /*
  * Pins the module specifiers an extension may `require` at runtime.
  *
- * The `Module.prototype.require` shim in `extension.service.ts` is where the Extension Interface is
- * defined in practice, and `LICENSE-EXCEPTION.md` grants an additional permission under section 7
- * of the AGPL to works that reach Platform.Bible only through that interface. The list is therefore
- * the boundary of a published, irrevocable license grant as well as a security control.
+ * The extension `require` the host hands each extension file (`requireForExtension` in
+ * `extension.service.ts`) is where the
+ * Extension Interface is defined in practice, and `LICENSE-EXCEPTION.md` grants an additional
+ * permission under section 7 of the AGPL to works that reach Platform.Bible only through that
+ * interface. The list is therefore the boundary of a published, irrevocable license grant as well
+ * as a security control.
  *
- * The shim itself has no seam - `activateExtensions` installs it as a side effect of loading
- * extensions, and the same function deletes `globalThis.eval`/`Function` and replaces
- * `fetch`/`XMLHttpRequest` - and `extension.service.ts` cannot even be imported here, because it
- * creates directories at module scope. So the shim dispatches from
- * `EXTENSION_INTERFACE_MODULE_SPECIFIERS` instead, in a module that imports nothing, and this
- * compares that VALUE. Any admission has to add a specifier there, in any syntax, and fail this.
+ * That `require` has no seam - it is private to `extension.service.ts`, `activateExtensions`
+ * applies the lockdowns as a side effect of loading extensions, which deletes
+ * `globalThis.eval`/`Function` and replaces `fetch`/`XMLHttpRequest` - and `extension.service.ts`
+ * cannot even be imported here, because it creates directories at module scope. So
+ * `requireForExtension` dispatches from `EXTENSION_INTERFACE_MODULE_SPECIFIERS` instead, in a
+ * module that imports nothing, and this compares that VALUE. Any admission has to add a specifier
+ * there, in any syntax, and fail this.
  *
  * The renderer half is read the same way, and for the same reason: `global-this-web-view.model.ts`
  * pulls in React and `platform-bible-react`, which do not load outside a browser environment, so its
@@ -34,7 +37,7 @@ const REPO = path.join(__dirname, '..', '..', '..');
 const LICENSE_EXCEPTION_PATH = path.join(REPO, 'LICENSE-EXCEPTION.md');
 
 /**
- * Module specifiers the shim answers itself instead of refusing.
+ * Module specifiers the extension `require` answers itself instead of refusing.
  *
  * Every entry is a promise this project has already made to extension authors. Adding one widens
  * the AGPL section 7 additional permission in `LICENSE-EXCEPTION.md`; removing one can push an
@@ -50,7 +53,7 @@ const PERMITTED_MODULE_SPECIFIERS = [
 ];
 
 const WIDENING_THE_GRANT = [
-  'The module specifiers this shim permits ARE the Extension Interface that LICENSE-EXCEPTION.md',
+  'The module specifiers the extension require permits ARE the Extension Interface that LICENSE-EXCEPTION.md',
   'names: its additional permission under section 7 of the AGPL frees a work from sections 4, 5, 6',
   'and 13 provided it talks to Platform.Bible only through them. Adding an entry widens a published,',
   'irrevocable grant, and removing one can put an existing extension outside it. If this change is',
@@ -83,14 +86,14 @@ const WIDENING_THE_GRANT = [
 const NAME_COMPARISON_DISPATCH =
   /moduleName\s*===\s*['"`]|['"`]\s*===\s*moduleName|switch\s*\(\s*moduleName|moduleName\s*\.\s*(startsWith|endsWith|includes|match)\s*\(\s*['"`]/;
 
-describe('extension host require shim allowlist', () => {
+describe('extension host require allowlist', () => {
   it(`permits exactly the modules the Extension Interface publishes — ${WIDENING_THE_GRANT}`, () => {
     expect(readPermittedModuleSpecifiers()).toEqual([...PERMITTED_MODULE_SPECIFIERS].sort());
   });
 
-  it(`dispatches from that list rather than comparing names in the shim — ${WIDENING_THE_GRANT}`, () => {
-    // The value comparison above is only a guard while the shim is what consumes the value. A shim
-    // that compared `moduleName` against string literals could admit a module the list does not
+  it(`dispatches from that list rather than comparing names in requireForExtension — ${WIDENING_THE_GRANT}`, () => {
+    // The value comparison above is only a guard while `requireForExtension` is what consumes the
+    // value. A `require` that compared `moduleName` against string literals could admit a module the list does not
     // name, and every assertion in this file would still pass.
     const source = readFileSync(path.join(__dirname, 'extension.service.ts'), 'utf8');
     expect(source).toContain('EXTENSION_INTERFACE_MODULES[moduleName]');
@@ -174,8 +177,8 @@ describe('the Extension Interface the license exception grants', () => {
 
   it(`is supplied in full by the extension host and the renderer between them — ${WIDENING_THE_GRANT}`, () => {
     // The grant is a promise that these modules are there to be linked against. A name the hosts do
-    // not answer is a promise nothing keeps; this is the direction the shim-only guard above cannot
-    // see, because it compares the shim against a copy of itself.
+    // not answer is a promise nothing keeps; this is the direction the allowlist guards above cannot
+    // see, because they compare each `require`'s list against a copy of itself.
     const supplied = readSuppliedModuleSpecifiers();
 
     expect(FIRST_PARTY_SUPPLIED_MODULES.filter((module) => !supplied.includes(module))).toEqual([]);

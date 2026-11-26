@@ -69,7 +69,7 @@
   "externalExtensions": {
     "example-private-extension": {
       "itemized": false,
-      "reason": "Built in another repository, which emits no module manifest yet, so its bundle cannot be itemized here."
+      "reason": "Built in another repository whose build is not part of this one, so its bundle cannot be itemized here."
     }
   }
 }

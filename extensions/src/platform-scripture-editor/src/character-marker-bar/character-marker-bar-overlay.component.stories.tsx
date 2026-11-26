@@ -123,6 +123,10 @@ const editorContent = (
     <p className="para usfm_q2" style={INDENT2_STYLE}>
       Even though I walk through the valley of the shadow of death, I will fear no evil.
     </p>
+    {/* Verses outside any paragraph marker render as a bare `<p>` with no USFM class. */}
+    <p style={PARA_STYLE}>
+      You prepare a table before me in the presence of my enemies; you anoint my head with oil.
+    </p>
     <p className="para usfm_p" style={PARA_STYLE}>
       Surely goodness and mercy shall follow me all the days of my life, and I shall dwell in the
       house of the LORD forever.

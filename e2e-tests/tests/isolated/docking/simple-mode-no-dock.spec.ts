@@ -54,7 +54,7 @@ const WINDOW_SIZE = { width: 1920, height: 1080 };
  */
 const SHARED_TEST_OPTIONS = {
   seedSettings: { 'platform.firstRunComplete': true },
-  electronLaunchOptions: { isolatedProjectRoot: true, envOverrides: { DEV_NOISY: 'false' } },
+  electronLaunchOptions: { isolatedProjectRoot: true },
   windowSize: WINDOW_SIZE,
 };
 

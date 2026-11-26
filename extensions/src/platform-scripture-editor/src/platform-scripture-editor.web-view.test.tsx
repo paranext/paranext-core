@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as React from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import type { WebViewProps } from '@papi/core';
+import { logger } from '@papi/frontend';
 import { newPlatformError } from 'platform-bible-utils';
 import { EMPTY_CHAPTER_VIEW_KEYS } from './empty-chapter-view.const';
 
@@ -26,24 +27,60 @@ const {
   projectDataProviders,
   projectSettings,
   loadingProjectSettings,
-} = vi.hoisted(() => ({
-  mockUseProjectData: vi.fn(),
-  mockUseLocalizedStrings: vi.fn(),
-  mockNotifyEditActionBlocked: vi.fn(),
-  /** What the chapter subscription delivers instead of its default, when set. */
-  chapterUsjValue: { current: undefined as unknown },
-  /** What the stubbed editor exposes through its ref; nothing, as an unmounted editor, by default. */
-  editorHandle: { current: undefined as unknown },
-  /**
-   * The project data providers `useProjectDataProvider` answers, by name; any other is unavailable.
-   * Each must keep its identity across renders, or the web view refetches on every render.
-   */
-  projectDataProviders: new Map<string, unknown>(),
-  /** Project settings that read as something other than their default, by key. */
-  projectSettings: new Map<string, unknown>(),
-  /** Project settings whose read is still pending, by key; they read as their default meanwhile. */
-  loadingProjectSettings: new Set<string>(),
-}));
+  appSettings,
+  mockGetLocalizedStrings,
+  toolbarProps,
+  webViewMenu,
+  mockContextKeysSet,
+  captureSelectionHandler,
+  chapterUsjFor,
+  chapterUsjSave,
+  notificationsSend,
+  editorProps,
+} = vi.hoisted(() => {
+  /** An empty, typed slot a test fills in. */
+  const slot = <T,>(): { current: T | undefined } => ({ current: undefined });
+  return {
+    mockUseProjectData: vi.fn(),
+    mockUseLocalizedStrings: vi.fn(),
+    mockNotifyEditActionBlocked: vi.fn(),
+    /** What the chapter subscription delivers instead of its default, when set. */
+    chapterUsjValue: { current: undefined as unknown },
+    /** What the stubbed editor exposes through its ref; nothing, as an unmounted editor, by default. */
+    editorHandle: { current: undefined as unknown },
+    /**
+     * The project data providers `useProjectDataProvider` answers, by name; any other is
+     * unavailable. Each must keep its identity across renders, or the web view refetches on every
+     * render.
+     */
+    projectDataProviders: new Map<string, unknown>(),
+    /** Project settings that read as something other than their default, by key. */
+    projectSettings: new Map<string, unknown>(),
+    /** Project settings whose read is still pending, by key; they read as their default meanwhile. */
+    loadingProjectSettings: new Set<string>(),
+    /** User settings that read as something other than their default, by key. */
+    appSettings: new Map<string, unknown>(),
+    /** Answers the localization service's `getLocalizedStrings` (used for the tab title). */
+    mockGetLocalizedStrings: vi.fn(),
+    /** The menu the toolbar was last rendered with. */
+    toolbarProps: { current: undefined as unknown },
+    /** What the web view menu subscription delivers instead of its default, when set. */
+    webViewMenu: { current: undefined as unknown },
+    mockContextKeysSet: vi.fn(),
+    /** Receives the `onSelectionChange` the stubbed editor was last rendered with. */
+    captureSelectionHandler: vi.fn<(handler: unknown) => void>(),
+    /**
+     * When set, what the chapter subscription delivers for a chapter number, and whether it is
+     * still loading; takes precedence over {@link chapterUsjValue}.
+     */
+    chapterUsjFor: slot<(chapterNum: number) => [unknown, boolean]>(),
+    /** When set, the chapter subscription's setter: called with the chapter number and the USJ. */
+    chapterUsjSave: slot<(chapterNum: number, usj: unknown) => unknown>(),
+    notificationsSend: vi.fn(() => Promise.resolve('notification-id')),
+    /** The props the stubbed editor was last rendered with. */
+    editorProps: slot<Record<string, unknown>>(),
+  };
+});
 
 /** What each key localizes to by default; any other key echoes itself, as an unresolved one does. */
 const TRANSLATIONS: Record<string, string> = {
@@ -64,19 +101,41 @@ function localizeWith(translations: Record<string, string>) {
  * type answers with the default value its caller passed, settled and not loading, except that
  * `ChapterUSJ` answers with {@link chapterUsjValue} when one is set.
  */
+function dataValueFor(dataType: string | symbol, defaultValue: unknown): unknown {
+  if (dataType === 'ChapterUSJ' && chapterUsjValue.current !== undefined) {
+    return chapterUsjValue.current;
+  }
+  if (dataType === 'WebViewMenu' && webViewMenu.current !== undefined) return webViewMenu.current;
+  return defaultValue;
+}
+
 function dataHooks() {
   return new Proxy(
     {},
     {
-      get: (_target, dataType) => (_selector: unknown, defaultValue: unknown) => [
-        dataType === 'ChapterUSJ' && chapterUsjValue.current !== undefined
-          ? chapterUsjValue.current
-          : defaultValue,
-        vi.fn(),
-        false,
-      ],
+      get: (_target, dataType) => (selector: unknown, defaultValue: unknown) => {
+        if (dataType === 'ChapterUSJ' && chapterUsjFor.current) {
+          // The real selector carries `chapterNum`; the chapter hooks are the only ones read here.
+          // eslint-disable-next-line no-type-assertion/no-type-assertion
+          const { chapterNum } = selector as { chapterNum: number };
+          const [value, isLoading] = chapterUsjFor.current(chapterNum);
+          return [value, chapterSetter(chapterNum), isLoading];
+        }
+        return [dataValueFor(dataType, defaultValue), vi.fn(), false];
+      },
     },
   );
+}
+
+/** One setter per chapter, kept across renders as the real hook keeps it, bound to its chapter. */
+const chapterSetters = new Map<number, (usj: unknown) => unknown>();
+function chapterSetter(chapterNum: number) {
+  let setter = chapterSetters.get(chapterNum);
+  if (!setter) {
+    setter = (usj: unknown) => chapterUsjSave.current?.(chapterNum, usj);
+    chapterSetters.set(chapterNum, setter);
+  }
+  return setter;
 }
 
 vi.mock('@papi/frontend', () => {
@@ -85,8 +144,25 @@ vi.mock('@papi/frontend', () => {
   const service: unknown = new Proxy(() => Promise.resolve(undefined), {
     get: (_target, property) => (property === 'then' ? undefined : service),
   });
+  const papi: unknown = new Proxy(
+    {},
+    {
+      get: (_target, property) => {
+        if (property === 'contextKeys') return { set: mockContextKeysSet, remove: vi.fn() };
+        if (property === 'localization') {
+          return { getLocalizedStrings: mockGetLocalizedStrings };
+        }
+        if (property === 'notifications')
+          return new Proxy(
+            {},
+            { get: (_t, method) => (method === 'send' ? notificationsSend : service) },
+          );
+        return service;
+      },
+    },
+  );
   return {
-    default: service,
+    default: papi,
     logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() },
   };
 });
@@ -106,7 +182,12 @@ vi.mock('@papi/frontend/react', () => ({
     vi.fn(),
     loadingProjectSettings.has(key),
   ],
-  useSetting: (_key: unknown, defaultValue: unknown) => [defaultValue, vi.fn(), vi.fn(), false],
+  useSetting: (key: string, defaultValue: unknown) => [
+    appSettings.has(key) ? appSettings.get(key) : defaultValue,
+    vi.fn(),
+    vi.fn(),
+    false,
+  ],
   useRecentScriptureRefs: () => ({ recentScriptureRefs: [], addRecentScriptureRef: vi.fn() }),
 }));
 
@@ -116,6 +197,11 @@ vi.mock('platform-bible-react', async (importOriginal) => {
     ...original,
     // The real hook builds an IntersectionObserver, which jsdom does not implement.
     useViewVisibility: () => true,
+    // Wraps the real toolbar so a test can read the menu it was handed.
+    TabToolbar: ({ projectMenuData, ...props }: Record<string, unknown>) => {
+      toolbarProps.current = projectMenuData;
+      return <original.TabToolbar projectMenuData={projectMenuData} {...props} />;
+    },
   };
 });
 
@@ -124,9 +210,17 @@ vi.mock('@eten-tech-foundation/platform-editor', async (importOriginal) => {
   const original = await importOriginal<typeof import('@eten-tech-foundation/platform-editor')>();
   return {
     ...original,
-    Editorial: React.forwardRef((_props, ref) => {
+    Editorial: React.forwardRef((props: Record<string, unknown>, ref) => {
+      editorProps.current = props;
+      captureSelectionHandler(props.onSelectionChange);
       React.useImperativeHandle(ref, () => editorHandle.current);
-      return <div data-testid="editorial" />;
+      // The real editor wraps its content-editable in `.editor-container`; the web view scopes its
+      // focus handling to that element.
+      return (
+        <div className="editor-container">
+          <div data-testid="editorial" tabIndex={-1} />
+        </div>
+      );
     }),
   };
 });
@@ -157,6 +251,7 @@ function makeProps(
   unsupportedReason: string,
   state: Record<string, unknown> = {},
   book = 'GEN',
+  chapterNum = 1,
 ): WebViewProps {
   // The object literal only provides the minimum props needed for testing — the double cast
   // avoids satisfying every optional field of WebViewProps.
@@ -176,7 +271,7 @@ function makeProps(
       },
     ),
     useWebViewScrollGroupScrRef: vi.fn(() => [
-      { book, chapterNum: 1, verseNum: 1, versificationStr: 'English' },
+      { book, chapterNum, verseNum: 1, versificationStr: 'English' },
       vi.fn(),
       undefined,
       vi.fn(),
@@ -200,10 +295,30 @@ beforeEach(() => {
   mockUseProjectData.mockClear();
   mockNotifyEditActionBlocked.mockClear();
   chapterUsjValue.current = undefined;
+  chapterUsjFor.current = undefined;
+  chapterUsjSave.current = undefined;
+  chapterSetters.clear();
+  notificationsSend.mockClear();
+  editorProps.current = undefined;
   editorHandle.current = undefined;
+  captureSelectionHandler.mockClear();
+  mockContextKeysSet.mockClear();
   projectDataProviders.clear();
   projectSettings.clear();
   loadingProjectSettings.clear();
+  appSettings.clear();
+  toolbarProps.current = undefined;
+  webViewMenu.current = undefined;
+  mockGetLocalizedStrings.mockReset();
+  mockGetLocalizedStrings.mockImplementation(async ({ localizeKeys }: { localizeKeys: string[] }) =>
+    Object.fromEntries(
+      localizeKeys.map((key) => {
+        if (key.includes('readonly_indicator')) return [key, '(Read-only)'];
+        if (key.includes('editable_indicator')) return [key, '(Editable)'];
+        return [key, '{editable} {projectName}'];
+      }),
+    ),
+  );
   mockUseLocalizedStrings.mockReset();
   mockUseLocalizedStrings.mockImplementation(localizeWith(TRANSLATIONS));
   // The web view host supplies this global; the editor reads its persisted view type through it.
@@ -533,5 +648,1088 @@ describe('Scripture editor while the invisible-characters setting cannot be read
     expect(screen.getByTestId('editorial')).toBeInTheDocument();
     expect(screen.queryByText(BANNER_KEY)).not.toBeInTheDocument();
     expect(screen.getAllByRole('option')).toHaveLength(1);
+  });
+});
+
+describe('Scripture editor "Change footnote pane location" request', () => {
+  const chapterWithFootnote = {
+    type: 'USJ',
+    version: '3.1',
+    content: [
+      { type: 'book', marker: 'id', code: 'GEN' },
+      { type: 'chapter', marker: 'c', number: '1' },
+      {
+        type: 'para',
+        marker: 'p',
+        content: [
+          { type: 'verse', marker: 'v', number: '1' },
+          'In the beginning',
+          { type: 'note', marker: 'f', caller: '+', content: ['A footnote text'] },
+        ],
+      },
+    ],
+  };
+
+  /** Every write the web view made to its web-view state, in order, as `[key, value]`. */
+  let stateWrites: [string, unknown][] = [];
+
+  beforeEach(() => {
+    stateWrites = [];
+  });
+
+  /**
+   * Props whose web-view state is kept per key across renders, starting from `initialState`, and
+   * whose writes are recorded in {@link stateWrites}.
+   */
+  function makeStatefulProps(initialState: Record<string, unknown>): WebViewProps {
+    const props = makeProps('', initialState);
+    return {
+      ...props,
+      // useWebViewState is generic (key → TState) but this stand-in can't express that genericity.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      useWebViewState: (key: string, defaultValue: any) => {
+        const [value, setValue] = React.useState(
+          key in initialState ? initialState[key] : defaultValue,
+        );
+        return [
+          value,
+          (stateValue: unknown) => {
+            stateWrites.push([key, stateValue]);
+            setValue(stateValue);
+          },
+          () => setValue(defaultValue),
+        ];
+      },
+    };
+  }
+
+  async function requestLocationChange() {
+    await act(async () => {
+      window.dispatchEvent(
+        new MessageEvent('message', { data: { method: 'changeFootnotesPaneLocation' } }),
+      );
+    });
+  }
+
+  it('opens a hidden footnotes pane in the new position', async () => {
+    chapterUsjValue.current = chapterWithFootnote;
+    const EditorWebView = getEditorWebView();
+    await act(async () => {
+      render(
+        <EditorWebView
+          {...makeStatefulProps({ footnotesPaneVisible: false, isReadOnly: false })}
+        />,
+      );
+    });
+    // Positive control: the pane starts closed, so its footnote row is not listed.
+    expect(screen.getByTestId('editorial')).toBeInTheDocument();
+    expect(screen.queryByRole('option')).not.toBeInTheDocument();
+
+    await requestLocationChange();
+
+    expect(screen.getAllByRole('option')).toHaveLength(1);
+    // The pane starts at the bottom (the default), so it opens beside the text.
+    expect(stateWrites).toContainEqual(['footnotesPanePosition', 'trailing']);
+  });
+
+  it('keeps a shown footnotes pane open', async () => {
+    chapterUsjValue.current = chapterWithFootnote;
+    const EditorWebView = getEditorWebView();
+    await act(async () => {
+      render(
+        <EditorWebView {...makeStatefulProps({ footnotesPaneVisible: true, isReadOnly: false })} />,
+      );
+    });
+    expect(screen.getAllByRole('option')).toHaveLength(1);
+
+    await requestLocationChange();
+
+    expect(screen.getAllByRole('option')).toHaveLength(1);
+  });
+});
+
+const HAS_SELECTION_KEY = 'platformScriptureEditor.webView.editor-web-view-id.hasSelection';
+const selectionStart = { jsonPath: '$.content[2].content[1]', offset: 0 };
+const selectionRange = { start: selectionStart, end: { ...selectionStart, offset: 5 } };
+
+const chapterWithText = {
+  type: 'USJ',
+  version: '3.1',
+  content: [
+    { type: 'book', marker: 'id', code: 'GEN' },
+    { type: 'chapter', marker: 'c', number: '1' },
+    {
+      type: 'para',
+      marker: 'p',
+      content: [{ type: 'verse', marker: 'v', number: '1' }, 'In the beginning'],
+    },
+  ],
+};
+
+/** The values published for the hasSelection key, in order. */
+const publishedValues = () =>
+  mockContextKeysSet.mock.calls
+    .filter(([key]) => key === HAS_SELECTION_KEY)
+    .map(([, value]) => value);
+
+describe('Scripture editor hasSelection context key', () => {
+  const EditorWebViewUnderTest = getEditorWebView();
+  const webViewElement = (chapterNum = 1) => (
+    <EditorWebViewUnderTest {...makeProps('', { isReadOnly: false }, 'GEN', chapterNum)} />
+  );
+
+  const selectInEditor = async (selection: unknown) => {
+    await act(async () => {
+      const handler = captureSelectionHandler.mock.lastCall?.[0];
+      expect(handler).toBeInstanceOf(Function);
+      if (typeof handler === 'function') await handler(selection);
+    });
+  };
+
+  it('publishes hasSelection true for a selectionRange and keeps it when the editor reports no selection on blur', async () => {
+    chapterUsjValue.current = chapterWithText;
+    await act(async () => {
+      render(webViewElement());
+    });
+    // Positive control: the key starts false.
+    expect(publishedValues()).toEqual([false]);
+
+    await selectInEditor(selectionRange);
+    await selectInEditor(undefined);
+
+    expect(publishedValues()).toEqual([false, true]);
+  });
+
+  it('publishes hasSelection false when a later selection is a caret, writing only on a flip', async () => {
+    chapterUsjValue.current = chapterWithText;
+    await act(async () => {
+      render(webViewElement());
+    });
+
+    await selectInEditor(selectionRange);
+    await selectInEditor({ start: selectionStart, end: { ...selectionStart, offset: 7 } });
+    await selectInEditor({ start: selectionStart });
+
+    expect(publishedValues()).toEqual([false, true, false]);
+  });
+
+  it('publishes hasSelection false after a chapter change', async () => {
+    chapterUsjValue.current = chapterWithText;
+    let result: ReturnType<typeof render> | undefined;
+    await act(async () => {
+      result = render(webViewElement(1));
+    });
+    await selectInEditor(selectionRange);
+    expect(publishedValues()).toEqual([false, true]);
+
+    await act(async () => {
+      result?.rerender(webViewElement(2));
+    });
+
+    expect(publishedValues()).toEqual([false, true, false]);
+  });
+
+  it('publishes hasSelection false when new text from outside replaces the open chapter', async () => {
+    // A mounted editor, so incoming text is applied to it; every method is a no-op.
+    const setUsj = vi.fn();
+    editorHandle.current = new Proxy(
+      {},
+      { get: (_target, property) => (property === 'setUsj' ? setUsj : vi.fn()) },
+    );
+    chapterUsjValue.current = chapterWithText;
+    let result: ReturnType<typeof render> | undefined;
+    await act(async () => {
+      result = render(webViewElement(1));
+    });
+    await selectInEditor(selectionRange);
+    // Positive control: the same chapter re-rendered with the same text keeps the key on.
+    await act(async () => {
+      result?.rerender(webViewElement(1));
+    });
+    expect(publishedValues()).toEqual([false, true]);
+    const setUsjCallsBeforeUpdate = setUsj.mock.calls.length;
+
+    // A background update of the same chapter, such as an in-place resource update.
+    chapterUsjValue.current = {
+      ...chapterWithText,
+      content: [
+        ...chapterWithText.content,
+        {
+          type: 'para',
+          marker: 'p',
+          content: [{ type: 'verse', marker: 'v', number: '2' }, 'More'],
+        },
+      ],
+    };
+    await act(async () => {
+      result?.rerender(webViewElement(1));
+    });
+
+    // The update really replaced the editor's content.
+    expect(setUsj.mock.calls.length).toBeGreaterThan(setUsjCallsBeforeUpdate);
+    expect(publishedValues()).toEqual([false, true, false]);
+  });
+});
+
+describe('Scripture editor hasSelection context key across a view switch', () => {
+  it('publishes hasSelection false after the Scripture view type changes', async () => {
+    // Switching between Standard and Formatted view only takes effect in Power mode.
+    appSettings.set('platform.interfaceMode', 'power');
+    chapterUsjValue.current = chapterWithText;
+    const EditorWebView = getEditorWebView();
+    const elementFor = (viewType: string) => (
+      <EditorWebView {...makeProps('', { isReadOnly: false, viewType })} />
+    );
+    let result: ReturnType<typeof render> | undefined;
+    await act(async () => {
+      result = render(elementFor('standard'));
+    });
+    await act(async () => {
+      const handler = captureSelectionHandler.mock.lastCall?.[0];
+      expect(handler).toBeInstanceOf(Function);
+      if (typeof handler === 'function') await handler(selectionRange);
+    });
+    expect(publishedValues().at(-1)).toBe(true);
+
+    await act(async () => {
+      result?.rerender(elementFor('formatted'));
+    });
+
+    expect(publishedValues().at(-1)).toBe(false);
+  });
+});
+
+describe('Scripture editor resource wiring', () => {
+  const TITLE_KEY = '%test_editor_title_format%';
+
+  /** Props for a read-only tab whose saved title format asks for the read-only indicator. */
+  const titleProps = () => makeProps('', { isReadOnly: true, unformattedTitle: TITLE_KEY });
+
+  const renderTab = async (props: WebViewProps) => {
+    const EditorWebView = getEditorWebView();
+    let result: ReturnType<typeof render> | undefined;
+    await act(async () => {
+      result = render(<EditorWebView {...props} />);
+    });
+    return result;
+  };
+
+  const rerenderTab = async (
+    result: ReturnType<typeof render> | undefined,
+    props: WebViewProps,
+  ) => {
+    const EditorWebView = getEditorWebView();
+    await act(async () => {
+      result?.rerender(<EditorWebView {...props} />);
+    });
+  };
+
+  it('leaves the tab title alone until the published setting is read, then sets the short name alone', async () => {
+    projectSettings.set('platform.name', 'engWEBUS');
+    loadingProjectSettings.add('platform.isPublished');
+    const props = titleProps();
+
+    const result = await renderTab(props);
+    // Held back while platform.isPublished loads; the same props send the title once it settles
+    // (below).
+    expect(props.updateWebViewDefinition).not.toHaveBeenCalled();
+
+    loadingProjectSettings.delete('platform.isPublished');
+    projectSettings.set('platform.isPublished', true);
+    await rerenderTab(result, props);
+
+    expect(props.updateWebViewDefinition).toHaveBeenCalledWith({ title: 'engWEBUS' });
+    // The tab has no icon yet, so the resource's book icon is sent separately.
+    expect(props.updateWebViewDefinition).toHaveBeenCalledWith({ iconName: 'book-open' });
+    expect(props.updateWebViewDefinition).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps the read-only indicator in the title of a read-only project', async () => {
+    projectSettings.set('platform.name', 'engWEBUS');
+    projectSettings.set('platform.isPublished', false);
+    const props = titleProps();
+
+    await renderTab(props);
+
+    expect(props.updateWebViewDefinition).toHaveBeenCalledWith({ title: '(Read-only) engWEBUS' });
+  });
+
+  /** The `iconName` values sent through `updateWebViewDefinition`, in call order. */
+  const sentIconNames = (props: WebViewProps) =>
+    vi
+      .mocked(props.updateWebViewDefinition)
+      .mock.calls.filter(([update]) => 'iconName' in update)
+      .map(([update]) => update.iconName);
+
+  it('gives a resource tab the book icon once the published setting is read', async () => {
+    loadingProjectSettings.add('platform.isPublished');
+    const props: WebViewProps = { ...makeProps(''), iconName: undefined };
+
+    const result = await renderTab(props);
+    expect(sentIconNames(props)).toEqual([]);
+
+    loadingProjectSettings.delete('platform.isPublished');
+    projectSettings.set('platform.isPublished', true);
+    await rerenderTab(result, props);
+
+    expect(sentIconNames(props)).toEqual(['book-open']);
+  });
+
+  it('sends no icon to a resource tab that already shows the book icon', async () => {
+    projectSettings.set('platform.name', 'engWEBUS');
+    projectSettings.set('platform.isPublished', true);
+    const props: WebViewProps = { ...titleProps(), iconName: 'book-open' };
+
+    await renderTab(props);
+
+    // Positive control: the tab is read as a resource, as its title without "(Read-only)" shows.
+    expect(props.updateWebViewDefinition).toHaveBeenCalledWith({ title: 'engWEBUS' });
+    expect(sentIconNames(props)).toEqual([]);
+  });
+
+  it('never takes the book icon away from a tab, for a project or when the setting cannot be read', async () => {
+    projectSettings.set('platform.isPublished', false);
+    const projectProps: WebViewProps = { ...makeProps(''), iconName: 'book-open' };
+    const projectResult = await renderTab(projectProps);
+    expect(sentIconNames(projectProps)).toEqual([]);
+    projectResult?.unmount();
+
+    projectSettings.set('platform.isPublished', newPlatformError('project unavailable'));
+    const failedProps: WebViewProps = { ...makeProps(''), iconName: 'book-open' };
+    await renderTab(failedProps);
+    expect(sentIconNames(failedProps)).toEqual([]);
+
+    // Positive control: a resource tab without the icon does get one under the same props.
+    projectSettings.set('platform.isPublished', true);
+    const resourceProps: WebViewProps = { ...makeProps(''), iconName: undefined };
+    await renderTab(resourceProps);
+    expect(sentIconNames(resourceProps)).toEqual(['book-open']);
+  });
+
+  beforeEach(() => {
+    webViewMenu.current = {
+      topMenu: {
+        columns: { 'platform.app': { label: 'Project', order: 1 } },
+        groups: {},
+        items: [],
+      },
+      includeDefaults: true,
+      contextMenu: undefined,
+    };
+  });
+
+  /** Reads `value[key]` when `value` is an object that has it. */
+  const read = (value: unknown, key: string): unknown =>
+    value && typeof value === 'object' && key in value
+      ? Object.entries(value).find(([k]) => k === key)?.[1]
+      : undefined;
+
+  const projectColumnLabel = () =>
+    read(read(read(toolbarProps.current, 'columns'), 'platform.app'), 'label');
+
+  it('names the menu heading after the resource short name', async () => {
+    projectSettings.set('platform.name', 'engWEBUS');
+    projectSettings.set('platform.isPublished', true);
+
+    await renderTab(makeProps('', { isReadOnly: true }));
+
+    expect(projectColumnLabel()).toBe('engWEBUS');
+  });
+
+  it('keeps the original menu heading for a project', async () => {
+    projectSettings.set('platform.name', 'engWEBUS');
+    projectSettings.set('platform.isPublished', false);
+
+    await renderTab(makeProps('', { isReadOnly: true }));
+
+    expect(projectColumnLabel()).toBe('Project');
+  });
+});
+
+describe('Scripture editor when its latest edits cannot be saved', () => {
+  const EDITS_LOST_KEY = '%webView_platformScriptureEditor_error_editsLost_format%';
+  const EDITS_REPLACED_KEY = '%webView_platformScriptureEditor_error_editsReplacedByUpdate_format%';
+  /** Longer than the editor's save debounce, so a pending save has fired after it. */
+  const LONGER_THAN_SAVE_DEBOUNCE_MS = 800;
+
+  // The save debounce and the ownership window are timer and clock driven; faking them runs a
+  // debounce out without waiting for it. Promises and microtasks stay real.
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** Runs the clock past the save debounce, so a pending save has fired. */
+  async function waitForSaveDebounce() {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(LONGER_THAN_SAVE_DEBOUNCE_MS);
+    });
+  }
+
+  function chapterText(chapterNum: number, text: string) {
+    return {
+      type: 'USJ',
+      version: '3.1',
+      content: [
+        { type: 'book', marker: 'id', code: 'GEN' },
+        { type: 'chapter', marker: 'c', number: `${chapterNum}` },
+        { type: 'para', marker: 'p', content: [{ type: 'verse', marker: 'v', number: '1' }, text] },
+      ],
+    };
+  }
+
+  /** The text of verse 1 in a chapter built by {@link chapterText}. */
+  function verseText(usj: unknown) {
+    return JSON.stringify(usj ?? '').match(/"number":"1"\},"([^"]*)"/)?.[1];
+  }
+
+  /**
+   * Opens GEN 1 in an unfocused editor whose saves stay in flight until the test finishes them.
+   * `delivered` holds each chapter the backend has delivered; while the selected chapter is not
+   * there yet, the subscription goes on delivering the last chapter it had, as the real data hook
+   * does while the next one loads.
+   */
+  async function setUp(state: Record<string, unknown> = {}) {
+    mockUseLocalizedStrings.mockImplementation(
+      localizeWith({
+        ...TRANSLATIONS,
+        [EDITS_LOST_KEY]: 'Not saved: {book} {chapter}',
+        [EDITS_REPLACED_KEY]: 'Changed outside: {book} {chapter}',
+      }),
+    );
+    vi.mocked(logger.warn).mockClear();
+    vi.mocked(logger.debug).mockClear();
+
+    const scrRef = { book: 'GEN', chapterNum: 1, verseNum: 1, versificationStr: 'English' };
+    const delivered = new Map<number, unknown>([[1, chapterText(1, 'In the beginning')]]);
+    let lastDelivered = delivered.get(1);
+    chapterUsjFor.current = (chapterNum) => {
+      const usj = delivered.get(chapterNum);
+      if (usj === undefined) return [lastDelivered, true];
+      lastDelivered = usj;
+      return [usj, false];
+    };
+
+    const saves: {
+      chapterNum: number;
+      usj: unknown;
+      finish: (result: boolean) => void;
+      reject: (error: Error) => void;
+    }[] = [];
+    chapterUsjSave.current = (chapterNum, usj) =>
+      new Promise<boolean>((resolve, reject) => {
+        saves.push({ chapterNum, usj, finish: resolve, reject });
+      });
+
+    let editorUsj: unknown;
+    let isEditorFocused = false;
+    editorHandle.current = new Proxy(
+      {},
+      {
+        get: (_target, property) => {
+          if (property === 'getUsj') return () => editorUsj;
+          if (property === 'setUsj')
+            return (usj: unknown) => {
+              editorUsj = usj;
+            };
+          if (property === 'isFocused') return () => isEditorFocused;
+          return vi.fn();
+        },
+      },
+    );
+
+    const props = makeProps('', { isReadOnly: false, ...state });
+    vi.mocked(props.useWebViewScrollGroupScrRef).mockImplementation(() => [
+      { ...scrRef },
+      vi.fn(),
+      undefined,
+      vi.fn(),
+      undefined,
+    ]);
+    const EditorWebView = getEditorWebView();
+    let result: ReturnType<typeof render> | undefined;
+    await act(async () => {
+      result = render(<EditorWebView {...props} />);
+    });
+    const rerender = async () => {
+      await act(async () => {
+        result?.rerender(<EditorWebView {...props} />);
+      });
+    };
+
+    return {
+      saves,
+      delivered,
+      unmount: () => result?.unmount(),
+      /** The user's edit to verse 1 of GEN 1, as the editor reports it. */
+      type: (text: string) => {
+        act(() => {
+          editorUsj = chapterText(1, text);
+          // The stubbed editor hands its props through; `onUsjChange` is the web view's handler.
+          // eslint-disable-next-line no-type-assertion/no-type-assertion
+          const onUsjChange = editorProps.current?.onUsjChange as (
+            usj: unknown,
+            ops: unknown[],
+            source: string,
+          ) => void;
+          onUsjChange(editorUsj, [], 'local');
+        });
+      },
+      blurWindow: () => {
+        act(() => {
+          window.dispatchEvent(new Event('blur'));
+        });
+      },
+      /** Gives the editor focus, so it claims the chapter while the user types in it. */
+      focus: () => {
+        isEditorFocused = true;
+      },
+      goToChapter: async (chapterNum: number) => {
+        scrRef.chapterNum = chapterNum;
+        await rerender();
+      },
+      deliver: async (chapterNum: number, usj: unknown) => {
+        delivered.set(chapterNum, usj);
+        await rerender();
+      },
+      /** Lets a save in flight come back, and the editor act on its result. */
+      finishSave: async (index: number) => {
+        await act(async () => {
+          saves[index].finish(true);
+        });
+      },
+      /** Lets a save in flight come back refused by the backend with `message`. */
+      rejectSave: async (index: number, message: string) => {
+        await act(async () => {
+          saves[index].reject(new Error(message));
+        });
+      },
+    };
+  }
+
+  /** The notifications sent that tell the user their latest edits were not saved. */
+  function lostEditsNotices() {
+    return notificationsSend.mock.calls
+      .map((call: unknown[]) => call[0])
+      .filter(
+        (notice) =>
+          notice instanceof Object &&
+          'message' in notice &&
+          typeof notice.message === 'string' &&
+          /^(Not saved|Changed outside):/.test(notice.message),
+      );
+  }
+
+  function lostEditsWarnings() {
+    return vi
+      .mocked(logger.warn)
+      .mock.calls.filter(([message]) =>
+        String(message).includes('before its latest edits were saved'),
+      );
+  }
+
+  /** Types in GEN 1 and sends it, then types more, which is held back behind that save. */
+  async function holdBackEditsBehindARunningSave(editor: Awaited<ReturnType<typeof setUp>>) {
+    editor.type('In the beginning God');
+    editor.blurWindow();
+    editor.type('In the beginning God created');
+    editor.blurWindow();
+    // Positive controls: one save is in flight, and the second was held back behind it.
+    expect(editor.saves).toHaveLength(1);
+    expect(vi.mocked(logger.debug)).toHaveBeenCalledWith(
+      expect.stringContaining('waiting for the save of GEN|1|'),
+    );
+  }
+
+  it('says nothing about a held-back save while the editor stays on the chapter, and sends it once the running save comes back', async () => {
+    const editor = await setUp();
+    await holdBackEditsBehindARunningSave(editor);
+
+    await editor.finishSave(0);
+    // The running save's update: what it sent, back from the backend.
+    await editor.deliver(1, chapterText(1, 'In the beginning God'));
+
+    expect(editor.saves).toHaveLength(2);
+    expect(verseText(editor.saves[1].usj)).toBe('In the beginning God created');
+    expect(lostEditsWarnings()).toHaveLength(0);
+    expect(lostEditsNotices()).toHaveLength(0);
+  });
+
+  it('reports nothing on leaving the chapter once the held-back edits have been sent', async () => {
+    const editor = await setUp();
+    await holdBackEditsBehindARunningSave(editor);
+    await editor.finishSave(0);
+    await editor.deliver(1, chapterText(1, 'In the beginning God'));
+    expect(editor.saves).toHaveLength(2);
+
+    await editor.goToChapter(2);
+    await editor.deliver(2, chapterText(2, 'Thus the heavens'));
+
+    expect(lostEditsWarnings()).toHaveLength(0);
+    expect(lostEditsNotices()).toHaveLength(0);
+  });
+
+  it('warns and notifies once, naming the chapter, when the editor leaves it with edits held back', async () => {
+    const editor = await setUp();
+    await holdBackEditsBehindARunningSave(editor);
+
+    await editor.goToChapter(2);
+    await editor.deliver(2, chapterText(2, 'Thus the heavens'));
+    editor.unmount();
+
+    expect(lostEditsWarnings()).toHaveLength(1);
+    expect(lostEditsNotices()).toEqual([
+      expect.objectContaining({ message: 'Not saved: GEN 1', webViewId: 'editor-web-view-id' }),
+    ]);
+  });
+
+  it('notifies once, outside the closing editor, when the page goes away with edits held back', async () => {
+    const editor = await setUp();
+    await holdBackEditsBehindARunningSave(editor);
+
+    act(() => {
+      window.dispatchEvent(new Event('pagehide'));
+    });
+    // The page's teardown unmounts the editor after `pagehide`; that must not report again.
+    editor.unmount();
+
+    expect(lostEditsWarnings()).toHaveLength(1);
+    expect(lostEditsNotices()).toEqual([
+      expect.objectContaining({ message: 'Not saved: GEN 1', webViewId: undefined }),
+    ]);
+  });
+
+  it('notifies once when the editor closes without the page going away while an edit still waits behind a running save', async () => {
+    const editor = await setUp();
+    editor.type('In the beginning God');
+    editor.blurWindow();
+    // Not flushed: this edit is still waiting for the save debounce when the editor closes.
+    editor.type('In the beginning God created');
+    // Positive control: only the first save has been sent.
+    expect(editor.saves).toHaveLength(1);
+
+    editor.unmount();
+
+    expect(editor.saves).toHaveLength(1);
+    expect(lostEditsWarnings()).toHaveLength(1);
+    expect(lostEditsNotices()).toEqual([expect.objectContaining({ message: 'Not saved: GEN 1' })]);
+  });
+
+  it('sends waiting edits as soon as focus leaves the editor for another control in its web view', async () => {
+    const editor = await setUp();
+    const editorElement = screen.getByTestId('editorial');
+    const outside = document.createElement('button');
+    document.body.append(outside);
+    try {
+      editor.type('In the beginning God');
+
+      // Control: focus moving within the editor's own area sends nothing yet.
+      fireEvent.focusOut(editorElement, { relatedTarget: editorElement.parentElement });
+      expect(editor.saves).toHaveLength(0);
+
+      fireEvent.focusOut(editorElement, { relatedTarget: outside });
+
+      expect(editor.saves).toHaveLength(1);
+      expect(verseText(editor.saves[0].usj)).toBe('In the beginning God');
+    } finally {
+      outside.remove();
+    }
+  });
+
+  it('sends waiting edits as soon as focus moves from the editor to another part of its container, such as the footnotes pane', async () => {
+    const editor = await setUp();
+    const editorElement = screen.getByTestId('editorial');
+    const editorArea = editorElement.closest('.editor-container');
+    const pane = document.createElement('button');
+    editorArea?.after(pane);
+    try {
+      // Positive control: the pane sits in the same container as the editor but outside its area.
+      expect(editorArea?.parentElement?.contains(pane)).toBe(true);
+      expect(editorArea?.contains(pane)).toBe(false);
+      editor.type('In the beginning God');
+
+      fireEvent.focusOut(editorElement, { relatedTarget: pane });
+
+      expect(editor.saves).toHaveLength(1);
+      expect(verseText(editor.saves[0].usj)).toBe('In the beginning God');
+    } finally {
+      pane.remove();
+    }
+  });
+
+  it('sends waiting edits as soon as focus leaves the footnotes pane', async () => {
+    const editor = await setUp({ footnotesPaneVisible: true });
+    const pane = document.querySelector<HTMLElement>('[data-footnotes-pane]');
+    const paneButton = pane?.querySelector('button');
+    const outside = document.createElement('button');
+    document.body.append(outside);
+    try {
+      if (!pane || !paneButton) throw new Error('The footnotes pane did not render');
+      fireEvent.focusIn(pane);
+      editor.type('In the beginning God');
+
+      // Control: focus moving within the pane sends nothing yet.
+      fireEvent.focusOut(pane, { relatedTarget: paneButton });
+      expect(editor.saves).toHaveLength(0);
+
+      fireEvent.focusOut(pane, { relatedTarget: outside });
+
+      expect(editor.saves).toHaveLength(1);
+      expect(verseText(editor.saves[0].usj)).toBe('In the beginning God');
+    } finally {
+      outside.remove();
+    }
+  });
+
+  it('throws waiting edits away, saying the chapter was changed outside, when an update arrives without the claim', async () => {
+    const editor = await setUp();
+    editor.type('In the beginning God');
+
+    // An unfocused editor has no claim, so this change made outside it replaces the editor.
+    await editor.deliver(1, chapterText(1, 'In the beginning, Find replaced this'));
+    await waitForSaveDebounce();
+
+    expect(editor.saves).toHaveLength(0);
+    expect(lostEditsNotices()).toEqual([
+      expect.objectContaining({ message: 'Changed outside: GEN 1' }),
+    ]);
+  });
+
+  it('says nothing when the user types and then types back the original text before the save fires, and an update arrives without the claim', async () => {
+    const editor = await setUp();
+    editor.type('In the beginning God');
+    editor.type('In the beginning');
+
+    await editor.deliver(1, chapterText(1, 'In the beginning, Find replaced this'));
+    await waitForSaveDebounce();
+
+    expect(editor.saves).toHaveLength(0);
+    expect(lostEditsWarnings()).toHaveLength(0);
+    expect(lostEditsNotices()).toHaveLength(0);
+  });
+
+  it('says nothing when an update arrives without the claim that already holds exactly what the user typed', async () => {
+    const editor = await setUp();
+    editor.type('In the beginning God');
+
+    await editor.deliver(1, chapterText(1, 'In the beginning God'));
+    await waitForSaveDebounce();
+
+    expect(editor.saves).toHaveLength(0);
+    expect(lostEditsWarnings()).toHaveLength(0);
+    expect(lostEditsNotices()).toHaveLength(0);
+  });
+
+  // The editor holds off typing, pasting and the like while the next chapter loads, but an edit
+  // that does not come through its own keyboard, such as one from the footnotes pane, still lands.
+  it('reports an edit that reaches the chapter being left while the next one loads', async () => {
+    const editor = await setUp();
+    await editor.goToChapter(2);
+    editor.type('In the beginning God');
+
+    await waitForSaveDebounce();
+    await editor.deliver(2, chapterText(2, 'Thus the heavens'));
+
+    expect(editor.saves).toHaveLength(0);
+    expect(lostEditsNotices()).toEqual([
+      expect.objectContaining({ message: 'Not saved: GEN 1', severity: 'error', duration: 0 }),
+    ]);
+  });
+
+  it('reports once when edits keep reaching the chapter being left, each save refused', async () => {
+    const editor = await setUp();
+    await editor.goToChapter(2);
+    editor.type('In the beginning God');
+    await waitForSaveDebounce();
+    // Positive control: the first save was refused, and is not reported while the editor still
+    // shows the chapter.
+    expect(vi.mocked(logger.debug)).toHaveBeenCalledWith(
+      expect.stringContaining('the editor has not loaded that chapter yet'),
+    );
+    expect(lostEditsNotices()).toHaveLength(0);
+    editor.type('In the beginning God created');
+    await waitForSaveDebounce();
+    await editor.deliver(2, chapterText(2, 'Thus the heavens'));
+
+    expect(editor.saves).toHaveLength(0);
+    expect(lostEditsWarnings()).toHaveLength(1);
+    expect(lostEditsNotices()).toEqual([expect.objectContaining({ message: 'Not saved: GEN 1' })]);
+  });
+
+  it('reports once when an edit is still waiting to save as the next chapter arrives after a refused one', async () => {
+    const editor = await setUp();
+    await editor.goToChapter(2);
+    editor.type('In the beginning God');
+    await waitForSaveDebounce();
+    expect(vi.mocked(logger.debug)).toHaveBeenCalledWith(
+      expect.stringContaining('the editor has not loaded that chapter yet'),
+    );
+    editor.type('In the beginning God created');
+    await editor.deliver(2, chapterText(2, 'Thus the heavens'));
+    await waitForSaveDebounce();
+
+    expect(editor.saves).toHaveLength(0);
+    expect(lostEditsWarnings()).toHaveLength(1);
+    expect(lostEditsNotices()).toEqual([expect.objectContaining({ message: 'Not saved: GEN 1' })]);
+  });
+
+  it('reports an edit still waiting to save when the next chapter arrives, naming the chapter being left', async () => {
+    const editor = await setUp();
+    await editor.goToChapter(2);
+    editor.type('In the beginning God');
+    await editor.deliver(2, chapterText(2, 'Thus the heavens'));
+    await waitForSaveDebounce();
+
+    expect(editor.saves).toHaveLength(0);
+    expect(lostEditsWarnings()).toHaveLength(1);
+    expect(lostEditsNotices()).toEqual([expect.objectContaining({ message: 'Not saved: GEN 1' })]);
+  });
+
+  it('reports nothing on leaving the chapter after a save that carries what the running save sends', async () => {
+    const editor = await setUp();
+    editor.type('In the beginning God');
+    editor.blurWindow();
+    expect(editor.saves).toHaveLength(1);
+    // The editor still holds exactly what the running save sends: the save it triggers holds
+    // nothing back.
+    editor.type('In the beginning God');
+    editor.blurWindow();
+    expect(editor.saves).toHaveLength(1);
+
+    await editor.goToChapter(2);
+    await editor.deliver(2, chapterText(2, 'Thus the heavens'));
+    editor.unmount();
+
+    expect(lostEditsWarnings()).toHaveLength(0);
+    expect(lostEditsNotices()).toHaveLength(0);
+  });
+
+  it('reports nothing on leaving the chapter when a focused editor gets an earlier save back while a later one runs, and both reach the backend', async () => {
+    const editor = await setUp();
+    editor.focus();
+    editor.type('In the beginning God');
+    await waitForSaveDebounce();
+    await editor.finishSave(0);
+    editor.type('In the beginning God created');
+    await waitForSaveDebounce();
+    expect(editor.saves).toHaveLength(2);
+
+    // The first save's update arrives while the second save is still running.
+    await editor.deliver(1, chapterText(1, 'In the beginning God'));
+    await editor.finishSave(1);
+    await editor.deliver(1, chapterText(1, 'In the beginning God created'));
+    await editor.goToChapter(2);
+    await editor.deliver(2, chapterText(2, 'Thus the heavens'));
+    editor.unmount();
+
+    expect(editor.saves.map((save) => verseText(save.usj))).toEqual([
+      'In the beginning God',
+      'In the beginning God created',
+    ]);
+    expect(lostEditsWarnings()).toHaveLength(0);
+    expect(lostEditsNotices()).toHaveLength(0);
+  });
+
+  it('reports nothing when the user leaves the chapter with edits held back and comes back before the next chapter loads', async () => {
+    const editor = await setUp();
+    await holdBackEditsBehindARunningSave(editor);
+
+    await editor.goToChapter(2);
+    await editor.goToChapter(1);
+    await editor.finishSave(0);
+    await editor.deliver(1, chapterText(1, 'In the beginning God'));
+    await editor.finishSave(1);
+
+    expect(editor.saves.map((save) => verseText(save.usj))).toEqual([
+      'In the beginning God',
+      'In the beginning God created',
+    ]);
+    expect(lostEditsWarnings()).toHaveLength(0);
+    expect(lostEditsNotices()).toHaveLength(0);
+  });
+
+  it('takes its own save back from the backend when the user returns to the chapter before that save lands', async () => {
+    const editor = await setUp();
+    editor.focus();
+    editor.type('In the beginning God');
+    // Leaving sends the waiting save, which is still running when the user comes back.
+    await editor.goToChapter(2);
+    await editor.deliver(2, chapterText(2, 'Thus the heavens'));
+    await editor.goToChapter(1);
+    expect(editor.saves).toHaveLength(1);
+
+    await editor.finishSave(0);
+    await editor.deliver(1, chapterText(1, 'In the beginning God'));
+
+    // The editor came back holding the chapter from before that save, with no edit of its own since,
+    // so it must not push that older copy over the save.
+    expect(editor.saves.map((save) => verseText(save.usj))).toEqual(['In the beginning God']);
+    expect(lostEditsNotices()).toHaveLength(0);
+  });
+
+  it('reports nothing on leaving the chapter after the editor returns to what the running save sends', async () => {
+    const editor = await setUp();
+    editor.type('In the beginning God');
+    editor.blurWindow();
+    editor.type('In the beginning God created');
+    editor.blurWindow();
+    // Positive control: the newer content was held back.
+    expect(vi.mocked(logger.debug)).toHaveBeenCalledWith(
+      expect.stringContaining('waiting for the save of GEN|1|'),
+    );
+    editor.type('In the beginning God');
+    editor.blurWindow();
+
+    await editor.goToChapter(2);
+    await editor.deliver(2, chapterText(2, 'Thus the heavens'));
+    editor.unmount();
+
+    expect(lostEditsWarnings()).toHaveLength(0);
+    expect(lostEditsNotices()).toHaveLength(0);
+  });
+
+  it('reports an edit undone back to the chapter the running save started from when the editor leaves before that save comes back', async () => {
+    const editor = await setUp();
+    editor.type('In the beginning God');
+    editor.blurWindow();
+    expect(editor.saves).toHaveLength(1);
+    // Undone back to what the backend held before the running save, which is not what it sends.
+    editor.type('In the beginning');
+    editor.blurWindow();
+
+    await editor.goToChapter(2);
+    await editor.deliver(2, chapterText(2, 'Thus the heavens'));
+    editor.unmount();
+
+    expect(lostEditsWarnings()).toHaveLength(1);
+    expect(lostEditsNotices()).toEqual([expect.objectContaining({ message: 'Not saved: GEN 1' })]);
+  });
+
+  it('sends an edit undone back to the chapter the running save started from once that save comes back', async () => {
+    const editor = await setUp();
+    editor.type('In the beginning God');
+    editor.blurWindow();
+    editor.type('In the beginning');
+    editor.blurWindow();
+
+    await editor.finishSave(0);
+    await editor.deliver(1, chapterText(1, 'In the beginning God'));
+
+    expect(editor.saves).toHaveLength(2);
+    expect(verseText(editor.saves[1].usj)).toBe('In the beginning');
+    expect(lostEditsNotices()).toHaveLength(0);
+  });
+
+  it('gives held edits replaced by an incoming update the plain not-saved notice', async () => {
+    const editor = await setUp();
+    await holdBackEditsBehindARunningSave(editor);
+    await editor.finishSave(0);
+
+    // The running save's update comes back different from what it sent, replacing the held edits.
+    await editor.deliver(1, chapterText(1, 'In the beginning, reformatted'));
+    await waitForSaveDebounce();
+
+    expect(lostEditsNotices()).toEqual([
+      expect.objectContaining({ message: 'Not saved: GEN 1', duration: 0 }),
+    ]);
+  });
+
+  it('reports nothing when the editor is back to what the running save sent as that save comes back reformatted', async () => {
+    const editor = await setUp();
+    await holdBackEditsBehindARunningSave(editor);
+    // Undone back to what the running save sent, before the save this schedules fires.
+    editor.type('In the beginning God');
+    await editor.finishSave(0);
+
+    await editor.deliver(1, chapterText(1, 'In the beginning God, reformatted'));
+    await waitForSaveDebounce();
+
+    expect(lostEditsWarnings()).toHaveLength(0);
+    expect(lostEditsNotices()).toHaveLength(0);
+  });
+
+  it('reports nothing more on leaving the chapter once a refused save has put the stored chapter back over the held edits', async () => {
+    const editor = await setUp();
+    await holdBackEditsBehindARunningSave(editor);
+
+    // The backend refuses the running save for a reason that reverts the editor, which takes the
+    // held edits back too; the failure notice is the user's word that the edit was not saved.
+    await editor.rejectSave(0, 'Permissions exception for projectId PROJECT1');
+    await editor.goToChapter(2);
+    await editor.deliver(2, chapterText(2, 'Thus the heavens'));
+    editor.unmount();
+
+    expect(lostEditsWarnings()).toHaveLength(0);
+    expect(lostEditsNotices()).toHaveLength(0);
+  });
+
+  it('reports once, naming the chapter first left, when the user moves on again before the next chapter loads', async () => {
+    const editor = await setUp();
+    await editor.goToChapter(2);
+    editor.type('In the beginning God');
+    // Still within the save debounce: the move on flushes the waiting save, which is refused.
+    await editor.goToChapter(3);
+    await waitForSaveDebounce();
+    await editor.deliver(3, chapterText(3, 'And the earth'));
+    await waitForSaveDebounce();
+
+    expect(editor.saves).toHaveLength(0);
+    expect(lostEditsWarnings()).toHaveLength(1);
+    expect(lostEditsNotices()).toEqual([expect.objectContaining({ message: 'Not saved: GEN 1' })]);
+  });
+
+  it('reports once when another edit reaching the chapter being left is refused after the user moves on again', async () => {
+    const editor = await setUp();
+    await editor.goToChapter(2);
+    editor.type('In the beginning God');
+    await waitForSaveDebounce();
+    await editor.goToChapter(3);
+    editor.type('In the beginning God created');
+    await waitForSaveDebounce();
+    await editor.deliver(3, chapterText(3, 'And the earth'));
+
+    expect(editor.saves).toHaveLength(0);
+    expect(lostEditsWarnings()).toHaveLength(1);
+    expect(lostEditsNotices()).toEqual([expect.objectContaining({ message: 'Not saved: GEN 1' })]);
+  });
+
+  it('reports nothing when the user comes back to the chapter being left before the next one loads, and its refused edit is sent', async () => {
+    const editor = await setUp();
+    await editor.goToChapter(2);
+    editor.type('In the beginning God');
+    await waitForSaveDebounce();
+    expect(editor.saves).toHaveLength(0);
+
+    await editor.goToChapter(1);
+    editor.type('In the beginning God created');
+    await waitForSaveDebounce();
+    await editor.goToChapter(2);
+    await editor.deliver(2, chapterText(2, 'Thus the heavens'));
+    editor.unmount();
+
+    expect(editor.saves.map((save) => verseText(save.usj))).toEqual([
+      'In the beginning God created',
+    ]);
+    expect(lostEditsWarnings()).toHaveLength(0);
+    expect(lostEditsNotices()).toHaveLength(0);
+  });
+
+  it('sends the notice outside the closing editor when the page goes away while the next chapter loads', async () => {
+    const editor = await setUp();
+    await editor.goToChapter(2);
+    editor.type('In the beginning God');
+
+    act(() => {
+      window.dispatchEvent(new Event('pagehide'));
+    });
+    editor.unmount();
+
+    expect(editor.saves).toHaveLength(0);
+    expect(lostEditsNotices()).toEqual([
+      expect.objectContaining({ message: 'Not saved: GEN 1', webViewId: undefined }),
+    ]);
   });
 });
