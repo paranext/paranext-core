@@ -1,0 +1,136 @@
+name: Sync dist
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'lib/platform-bible-react/**'
+      - '!lib/platform-bible-react/dist/**'
+      - 'lib/platform-bible-utils/**'
+      - '!lib/platform-bible-utils/dist/**'
+
+concurrency:
+  group: sync-dist
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  sync-dist:
+    name: Rebuild and sync dist
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out ${{ github.ref_name }}
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
+      - name: Read package.json
+        id: package_json
+        uses: zoexx/github-action-json-file-properties@1.0.6
+        with:
+          file_path: 'package.json'
+
+      - name: Install Node.js and NPM
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ fromJson(steps.package_json.outputs.volta).node }}
+          cache: npm
+
+      - name: Install packages
+        run: npm ci
+
+      # Snapshot the currently-committed index.d.ts files before the rebuild overwrites them, so
+      # the diff step below has a real "before". Reads from the git object store, not the working
+      # tree, so it doesn't matter that this runs before the build steps mutate dist/.
+      - name: Snapshot committed index.d.ts files
+        run: |
+          mkdir -p "$RUNNER_TEMP/before"
+          git show HEAD:lib/platform-bible-utils/dist/index.d.ts \
+            > "$RUNNER_TEMP/before/utils-index.d.ts" 2>/dev/null \
+            || echo '(no previous lib/platform-bible-utils/dist/index.d.ts)' \
+              > "$RUNNER_TEMP/before/utils-index.d.ts"
+          git show HEAD:lib/platform-bible-react/dist/index.d.ts \
+            > "$RUNNER_TEMP/before/react-index.d.ts" 2>/dev/null \
+            || echo '(no previous lib/platform-bible-react/dist/index.d.ts)' \
+              > "$RUNNER_TEMP/before/react-index.d.ts"
+
+      # platform-bible-react resolves the platform-bible-utils package to its dist/ output via the
+      # npm workspace exports map, so utils has to build first. Calling build:basic directly
+      # (rather than the root build:platform-bible-* aliases) skips lint-fix/test/typedoc, which
+      # this workflow doesn't need and which could touch source files and trip the next step for a
+      # reason unrelated to dist drift.
+      - name: Build platform-bible-utils
+        run: cd lib/platform-bible-utils && npm run build:basic
+
+      - name: Build platform-bible-react
+        run: cd lib/platform-bible-react && npm run build:basic
+
+      # Fails the job if the rebuild touched anything outside dist/ -- that would mean something
+      # other than generated output changed, and we should not open a PR for it unreviewed.
+      - name: Verify only dist/ changed
+        id: verify-changed-files
+        uses: tj-actions/verify-changed-files@v20
+        with:
+          files_ignore: |
+            lib/platform-bible-react/dist/**
+            lib/platform-bible-utils/dist/**
+
+      - name: Fail if non-dist files changed
+        if: steps.verify-changed-files.outputs.files_changed == 'true'
+        env:
+          CHANGED_FILES: ${{ steps.verify-changed-files.outputs.changed_files }}
+        run: |
+          echo "Rebuilding platform-bible-utils/platform-bible-react changed files outside dist/:"
+          echo "$CHANGED_FILES"
+          exit 1
+
+      - name: Generate index.d.ts diffs
+        run: |
+          mkdir -p "$RUNNER_TEMP/diff"
+          diff -u "$RUNNER_TEMP/before/utils-index.d.ts" lib/platform-bible-utils/dist/index.d.ts \
+            > "$RUNNER_TEMP/diff/utils-index.diff"; true
+          diff -u "$RUNNER_TEMP/before/react-index.d.ts" lib/platform-bible-react/dist/index.d.ts \
+            > "$RUNNER_TEMP/diff/react-index.diff"; true
+
+      - name: Build PR body
+        run: |
+          {
+            echo "Automated rebuild of \`lib/platform-bible-utils/dist\` and"
+            echo "\`lib/platform-bible-react/dist\` from their current source on \`${{ github.ref_name }}\`,"
+            echo "triggered by ${{ github.sha }}."
+            echo
+            echo "No need to hand-build and commit \`dist/\` locally for changes under"
+            echo "\`lib/platform-bible-utils\` or \`lib/platform-bible-react\` -- this workflow keeps"
+            echo "it in sync automatically after merge."
+            echo
+            echo "<details><summary>platform-bible-utils: dist/index.d.ts diff</summary>"
+            echo
+            echo '```diff'
+            cat "$RUNNER_TEMP/diff/utils-index.diff"
+            echo '```'
+            echo "</details>"
+            echo
+            echo "<details><summary>platform-bible-react: dist/index.d.ts diff</summary>"
+            echo
+            echo '```diff'
+            cat "$RUNNER_TEMP/diff/react-index.diff"
+            echo '```'
+            echo "</details>"
+          } > "$RUNNER_TEMP/pr-body.md"
+
+      - name: Open PR with rebuilt dist
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.DIST_SYNC_BOT_TOKEN }}
+          commit-message: 'chore: sync platform-bible-react/platform-bible-utils dist'
+          branch: chore/sync-dist
+          delete-branch: true
+          base: ${{ github.ref_name }}
+          title: 'chore: sync platform-bible-react/platform-bible-utils dist'
+          body-path: ${{ runner.temp }}/pr-body.md
+          add-paths: |
+            lib/platform-bible-react/dist
+            lib/platform-bible-utils/dist
