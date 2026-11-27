@@ -1,0 +1,65 @@
+import { Meta } from '@storybook/addon-docs/blocks';
+import { IconCatalog } from './icon-catalog/icon-catalog.component';
+import { ICON_CATALOG, ICON_CONFLICT_NOTES } from './icon-catalog/icon-usage.data';
+
+<Meta title="Reference/Icons" />
+
+# Icons
+
+This is the catalog of every icon shown anywhere in Platform.Bible — the renderer, the bundled
+extensions, and the shared `platform-bible-react` component library — with every place each icon
+is used and what it means there. Use it before picking an icon: reuse the icon the app already uses
+for that meaning, and avoid an icon that already means something else.
+
+Icons come from [lucide](https://lucide.dev/icons/) (`lucide-react`), plus a few from
+[tabler](https://tabler.io/icons) (`@tabler/icons-react`) inside the shadcn primitives. The tabler
+icons are to be replaced with their lucide equivalents (see UX decisions below); the catalog lists
+them because the app still draws them. Menus and
+web view tabs can name a lucide icon in kebab case (`iconNameBefore`, `iconNameAfter`, `iconName`)
+when it is registered in `lib/platform-bible-react/src/components/basics/lucide-icons.util.ts`.
+
+The catalog is maintained by hand in `src/stories/icon-catalog/icon-usage.data.ts`.
+`icon-usage.data.test.ts` fails when code imports or names an icon that the catalog does not list,
+when a listed site no longer shows its icon, and when a conflict has no assessment — so update the
+catalog in the same change that adds, moves or removes an icon.
+
+## UX decisions (as of 2026-11-27)
+
+The UX lead has decided these. Use them when you pick an icon; the code is still being brought in
+line, and each conflict below marked **Decided** states the change still needed.
+
+- **Bible texts panel**: `BookOpen`, the same icon as resources, in the menu and the tab. Stop using
+  `Book` for it.
+- **Dropdowns and sorting with `ChevronDown`**: follow the catalog's recommendation (move sorting to
+  arrows; keep `ChevronDown` for dropdowns, expanded sections and stepping forward).
+- **Checks**: the round circle check, `CircleCheck`, in the menu and the tab. Stop using
+  `CircleCheckBig` and `ClipboardCheck` for it.
+- **Commentaries panel**: `BookMarked` in the menu and the tab. Stop using `FileText` for it.
+- **Edit**: `Pen`. Stop using `Pencil`.
+- **Error and warning**: `CircleAlert` for errors, `TriangleAlert` for warnings. Stop using `Info`
+  on warning ribbons and the tabler alert icons.
+- **Import**: always the lucide `Import` icon. Stop using `FolderInput` and `Download` for import.
+- **Back**: `ArrowLeft`. Stop using `ArrowUp` for back.
+- **Opens outside the app**: `ExternalLink`. Stop using `Link` for it.
+- **Undo and redo**: `Undo2` and `Redo2`. Stop using `Undo` and `Redo`.
+- **Sorting**: `ArrowUp` and `ArrowDown`. Never use `ArrowUp` for submit, and never use a checkmark
+  (`Check`) for submit: a checkmark means checked or selected. The submit icon is to be chosen by
+  UX.
+- **Book names**: a different icon than `BookA`, which stays the dictionary icon. The icon is to be
+  chosen by UX.
+- **No Tabler icons**: use the lucide equivalent of every `@tabler/icons-react` icon, for example
+  lucide `X` for close.
+- **Get Resources header**: `Download`. Stop using `BookOpen` there.
+- **Language**: `Languages`. Stop using `Globe` for it.
+- **Search**: lucide `Search` everywhere. Stop using `TextSearch` and tabler `IconSearch`.
+
+<IconCatalog entries={ICON_CATALOG} conflictNotes={ICON_CONFLICT_NOTES} />
+
+## Not catalogued
+
+- **Image icons** — extension and menu icons given as an image path (`iconPathBefore`, `iconUrl`,
+  the default tab logo) rather than a lucide name.
+- **Tests, stories and Storybook helpers** — `*.test.*`, `*.stories.*`, `src/stories/`,
+  `lib/platform-bible-react/src/storybook/` and `lib/platform-bible-react/src/components/demo/`
+  are not part of the shipped app.
+- **Hand-drawn SVG** — inline `<svg>` markup is not an icon library glyph and is not tracked.
