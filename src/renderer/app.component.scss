@@ -29,12 +29,22 @@
  * The `body` selector above come from a specific place and should be preserved independent of this
  * selector, so disabling this linting rule here
  */
+// The app window must never scroll: a page scrolled by a `focus()` or `scrollIntoView` while
+// something is briefly wider or taller than the window stays scrolled, shifting the toolbar out of
+// view, with no scrollbar to bring it back when the overflow was vertical. `clip`, unlike `hidden`,
+// does not make `body` a scroll container, so nothing can scroll it, even from script. `html` sets
+// its own value so that `body`'s applies to `body` itself: without one, `body`'s overflow is passed
+// up to the viewport, which turns `clip` into `hidden` and stays scrollable from script.
+html {
+  overflow: hidden;
+}
+
 /* stylelint-disable-next-line no-duplicate-selectors */
 body {
   position: relative;
   height: 100vh;
   font-family: vars.$font-family;
-  overflow-y: hidden;
+  overflow: clip;
   display: flex;
   justify-content: center;
   align-items: center;

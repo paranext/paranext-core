@@ -27,6 +27,13 @@ function measureInsets(
  * `resize` follows once the width has updated. On a page zoom change, the titlebar area and
  * `window.innerWidth` already agree when `geometrychange` fires.
  *
+ * Also measured again whenever `devicePixelRatio` changes and when the page becomes visible. The
+ * main window starts hidden and is given its interface-scaling zoom only once it has painted, and a
+ * window restored onto a monitor whose scale factor differs from the one it was created on changes
+ * scale while it starts. Neither is guaranteed to be followed by a `geometrychange` or `resize`
+ * that reads settled values, and a stale measurement here squeezes the toolbar into a sliver or
+ * slides it under the native buttons until the user resizes the window.
+ *
  * Returns `undefined` when the API is unavailable — macOS draws its own traffic lights and has no
  * overlay — or when the overlay isn't visible (e.g. full screen). Linux uses the overlay, but which
  * desktop environments report geometry for it is unverified; one that does not falls back to the
@@ -51,12 +58,29 @@ export function useWindowControlsOverlay(): WindowControlsOverlayInsets | undefi
       );
     };
 
-    updateInsets();
+    // A `resolution` query names a single ratio, so it only reports a change onto or off that
+    // ratio; it is replaced with one for the new ratio after every change so that moving between,
+    // say, a 125 % and a 175 % monitor is still heard
+    let resolutionQuery: MediaQueryList | undefined;
+    const onResolutionChange = () => {
+      resolutionQuery?.removeEventListener('change', onResolutionChange);
+      resolutionQuery = window.matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`);
+      resolutionQuery.addEventListener('change', onResolutionChange);
+      updateInsets();
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') updateInsets();
+    };
+
+    onResolutionChange();
     windowControlsOverlay.addEventListener('geometrychange', updateInsets);
     window.addEventListener('resize', updateInsets);
+    document.addEventListener('visibilitychange', onVisibilityChange);
     return () => {
       windowControlsOverlay.removeEventListener('geometrychange', updateInsets);
       window.removeEventListener('resize', updateInsets);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      resolutionQuery?.removeEventListener('change', onResolutionChange);
     };
   }, [windowControlsOverlay]);
 
