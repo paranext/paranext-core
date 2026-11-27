@@ -302,6 +302,8 @@ import { SomeIcon } from 'lucide-react';
 
 Run `npm run storybook` and see:
 - **Guidelines/Component Choices** - When to use which component
+- **Guidelines/Menu Organization** - Which menu an entry belongs in (Paratext menu vs. tab menu vs. View menu) and the order of tab menu groups
+- **Guidelines/Tab Icons and Names** - One icon per tab content type; how Power-mode tab names are composed
 - **Guidelines/Responsiveness** - Narrow-first design requirements
 - **Guidelines/Application Interactions** - Standard interaction patterns
 - **Guidelines/Applying Changes** - How changes take effect (immediate vs. explicit apply), error handling, feedback, button microcopy

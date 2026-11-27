@@ -41,6 +41,11 @@ Gather the menu items and commands the feature needs. For each entry point, note
 
 ## Step 2: Determine Menu Groups
 
+Decide first which menu the entry belongs in. The UX rule is the **Guidelines/Menu Organization**
+page in the platform-bible-react Storybook (`lib/platform-bible-react/src/stories/guidelines/menu-organization.mdx`):
+app-wide entries go in the main (Paratext) menu, anything about one tab goes in that tab's menu, in
+the group order the page sets.
+
 Find the appropriate menu group by examining existing contributions:
 
 ```bash

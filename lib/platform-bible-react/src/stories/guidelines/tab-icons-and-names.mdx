@@ -1,0 +1,130 @@
+import { Meta } from '@storybook/addon-docs/blocks';
+import LinkTo from '@storybook/addon-links/react';
+
+<Meta title="Guidelines/Tab Icons and Names" />
+
+# Tab icons and names
+
+A tab's icon says what kind of content it holds; its name says which content. Together they let
+users tell tabs apart at a glance, even when a column is too narrow for the full name.
+
+See also: <LinkTo title="Guidelines/Interactions">Interactions</LinkTo> for tab navigation and
+layout, and <LinkTo title="Guidelines/Menu Organization">Menu Organization</LinkTo> for the tab
+menu.
+
+## Icons
+
+Every tab shows an icon according to its **content type**. All tabs of one content type use the
+same icon, and no two content types share one.
+
+Icons are [Lucide](https://lucide.dev/icons/) icons, set by name with the web view definition's
+`iconName` (drawn in the tab's text colour, so they follow the theme). `iconName` wins over
+`iconUrl`; with neither, the tab shows the app logo.
+
+| Content type    | Icon (`iconName`)                                         |
+| --------------- | --------------------------------------------------------- |
+| Project         | To be decided by UX                                       |
+| Resource        | [`book-open`](https://lucide.dev/icons/book-open)         |
+| Commentary      | [`book-marked`](https://lucide.dev/icons/book-marked)     |
+| Find            | [`search`](https://lucide.dev/icons/search)               |
+| Dictionary      | [`book-a`](https://lucide.dev/icons/book-a)               |
+| Comments        | [`message-square`](https://lucide.dev/icons/message-square) |
+| Checks          | [`circle-check`](https://lucide.dev/icons/circle-check)   |
+| Text Collection | [`library`](https://lucide.dev/icons/library)             |
+| Any other tool  | To be decided by UX                                       |
+
+The table records UX's decisions as of 2026-11-27; they match the icon catalog's decided icons
+(Reference → Icons in the core Storybook). Do not pick a new icon for a content type that is not
+listed or is marked "to be decided by UX" — ask UX.
+
+## Names in Power mode
+
+A Power-mode tab name is composed from the content's **short name** (the project's or resource's
+`platform.name`):
+
+| Tab                         | Name                         | Example            |
+| --------------------------- | ---------------------------- | ------------------ |
+| Project                     | `<shortname> (editable)`     | `ABC (editable)`   |
+|                             | `<shortname> (read-only)`    | `ABC (read-only)`  |
+| Resource or commentary      | `<shortname>`                | `NIV`              |
+| Tool                        | `<toolname>: <shortname>`    | `Find: ABC`        |
+
+- A tool's name is followed by a colon and the short name of the project it works on — not a dash,
+  not parentheses.
+- Resources and commentaries are never editable, so they get no indicator.
+- When the short name cannot be read, the tab shows the project id instead.
+
+For extension authors: put the format in a localized string, such as
+`"%myExtension_tabTitle%": "My tool: {projectName}"`, and fill it with
+`papi.localization.getLocalizedProjectTitle` in your web view provider and the
+`useLocalizedProjectTitle` hook inside the web view, so the name follows a project switch and a
+language change.
+
+## Names in Simple mode
+
+There is no separate Simple-mode naming rule yet. Today (as of 2026-11), Simple mode behaves like
+this:
+
+- The Scripture editor tab uses the same name as in Power mode (`ABC (Editable)`).
+- The panels of the fixed layout use a panel name rather than a composed one: "Bible texts",
+  "Commentaries", "Text Collection", "Comments", "Find", "Checks". The Bible texts and Commentaries
+  panels change to "Bible text: NIV" and "Commentary: NIV" once a resource is chosen. The Dictionary
+  panel is named "Dictionary: SDBH/SDBG".
+- When a column is too narrow for all its tab names, its tabs collapse to icon only, and the name
+  moves to the tab's tooltip and accessible name (`PlatformTabTitle` in
+  `src/renderer/components/docking/platform-tab-title.component.tsx`). This is why Simple-mode tabs
+  depend on their icon.
+
+## Current state (as of 2026-11)
+
+Where the app does not follow this page yet:
+
+### Icons
+
+- **Project tabs have no icon of their own.** The Scripture editor sets no `iconName` for a project
+  (`getEditorTabIconName` in
+  `extensions/src/platform-scripture-editor/src/platform-scripture-editor.utils.ts`), so project tabs
+  show the app logo.
+- **Several icons are Simple mode only.** The Find, Checks, Bible texts and Commentaries tabs set
+  their icon only in Simple mode (`find-web-view-definition.util.ts`,
+  `checks-side-panel.web-view-provider.ts`, and `createResourceTextPanelProvider` in
+  `extensions/src/platform-scripture-editor/src/main.ts`); in Power mode they show the app logo.
+  Comments, Dictionary, Text Collection and resource editor tabs show their icon in both modes.
+- **Commentaries use the wrong icon.** `getEditorTabIconName` gives every published resource
+  `book-open` and does not tell commentaries apart, and the Commentaries panel uses `file-text`;
+  both should be `book-marked`.
+- **Checks use the wrong icon.** The Checks side panel uses `clipboard-check`; it should be
+  `circle-check`, which is not yet registered in `LUCIDE_ICONS_BY_NAME`
+  (`lib/platform-bible-react/src/components/basics/lucide-icons.util.ts`), so a web view cannot name
+  it until it is added there.
+- **Many tool tabs show the app logo**: the inventories, Markers Checklist, Configure Checks, Manage
+  books, the enhanced resource and the Model text panel set no icon.
+
+### Power-mode names
+
+- **The project indicator is capitalized.** The English strings are `(Editable)` and `(Read-only)`
+  (`%webView_platformScriptureEditor_title_editable_indicator%` and
+  `%webView_platformScriptureEditor_title_readonly_indicator%` in
+  `extensions/src/platform-scripture-editor/contributions/localizedStrings.json`); the rule is
+  `(editable)` and `(read-only)`. The name itself comes from `formatEditorTitle` with the format
+  `%webView_platformScriptureEditor_title_format_2%` (`{projectName} {editable}`), and resources
+  already drop the indicator.
+- **Resource and commentary panels add a prefix.** The Bible texts and Commentaries panels are named
+  `Bible text: NIV` and `Commentary: NIV`
+  (`%webView_resourcePanel_bibleTexts_title_withResource%`,
+  `%webView_resourcePanel_commentaries_title_withResource%`), not just `NIV`. The Model text panel is
+  named `Model text: <name>`.
+- **The enhanced resource tab is named "Enhanced resource"**
+  (`%platformEnhancedResources_title_enhancedResource%`), without the resource's short name.
+- **Find and Checks have no short name.** Their tabs are named "Find" (`%webView_find_title%`) and
+  "Checks" (`%webView_checksSidePanel_title%`).
+- **Some tools use other separators.** Markers Checklist is `Markers Checklist - ABC`
+  (`%markersChecklist_windowTitle%`) and Manage books is `Manage books — ABC`
+  (`%manageBooks_dialog_titleWithProject%`).
+- **Tools that already follow the rule**: the inventories (`Character Inventory: ABC` and the
+  others), `Configure Checks: ABC`, and the Power-mode comment list (`Comments: ABC`,
+  `%webView_legacyCommentManager_commentList_titleWithProject%`).
+- **Tools not tied to one project are undecided.** The Dictionary is named after its source
+  (`Dictionary: SDBH/SDBG`, `%platformLexicalTools_dictionary_title_sdbhSdbg%`) and the Text
+  Collection holds several texts (`Text Collection`). How these tabs are named is to be decided by
+  UX.

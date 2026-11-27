@@ -1,0 +1,107 @@
+import { Meta } from '@storybook/addon-docs/blocks';
+import LinkTo from '@storybook/addon-links/react';
+
+<Meta title="Guidelines/Menu Organization" />
+
+# Menu organization
+
+Every menu entry has one right place. Users learn where to look: app-wide actions live in one
+menu, and everything about the tab in front of them lives on that tab. This page says which menu an
+entry belongs in and how a tab's menu is grouped.
+
+See also: <LinkTo title="Guidelines/Interactions">Interactions</LinkTo> for the menu patterns
+themselves, and <LinkTo title="Guidelines/Tab Icons and Names">Tab Icons and Names</LinkTo> for how
+tabs are labelled.
+
+## The rule
+
+| Menu                 | Where                                                                          | What goes there                                                                                                  |
+| -------------------- | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| **Paratext menu**    | The app's main menu, opened from the Paratext logo on the application title bar | App-wide entries only: ways to get or open a project (or several projects), global settings, and similar app-level actions |
+| **Tab menu**         | A hamburger (`Menu` icon) dropdown at the start of the tab toolbar             | Entries about this tab and its content, in groups                                                                |
+| **View menu**        | A vertical ellipsis (`EllipsisVertical` icon) dropdown on the end side of the tab toolbar | Options for how this tab displays its content                                                                    |
+
+- **Nothing tab-specific goes in the Paratext menu.** If an entry acts on the current tab, its
+  project or resource, or its selection, it belongs on the tab.
+- **Every tab has its own tab menu.** Its entries are grouped, with a heading per group.
+
+### Project and resource tabs
+
+The tab menu of a project or resource tab uses these groups, **in this order**:
+
+1. **The project's or resource's name** — the group is headed by its name (for example `ABC`), not
+   by the word "Project".
+2. **Edit**
+3. **Insert** — projects only. Resource tabs have no Insert group.
+4. **Tools and resources** in Simple mode, **Tools** in Power mode.
+
+### The View group is not in the tab menu
+
+View options do not go in the hamburger menu. They go in the vertical-ellipsis (⋮) dropdown on the end
+side of the tab toolbar, in both Simple and Power mode.
+
+## For extension authors
+
+Menus are contributed in your extension's `contributions/menus.json` (types:
+`MultiColumnMenu` in `lib/platform-bible-utils/src/extension-contributions/menus.model.ts`). A
+menu has `columns`, `groups` (each in a `column`, or in a submenu via `menuItem`) and `items` (each
+in a `group`), all positioned by `order`. In a tab menu, each column becomes one headed section of
+the hamburger dropdown.
+
+| Your entry                                                         | Put it in                                                                                                                                                       |
+| ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Get or open a project or resource, an app-wide setting, an app action | `mainMenu`, in a group of the `platform.app` column — `platform.projectProjects`, `platform.projectResources`, `platform.projectSettings` or `platform.projectMisc` (defined in `src/extension-host/data/menu.data.json`) |
+| Something about one project or resource tab as a whole             | The first column of that tab's `topMenu` (under `webViewMenus` for your web view type). With `includeDefaults: true` that is the core column `platform.app` from `defaultWebViewTopMenu`, with its groups `platform.projectTop`, `platform.manageBooks`, `platform.deleteProject` and `platform.projectDetails` |
+| Edit, Insert, Tools                                                | The matching column of that tab's `topMenu`, ordered after the first column as listed above                                                                     |
+| A view option (layout, zoom, what is shown)                        | Not in `topMenu`. It belongs in the ⋮ View menu, which does not exist yet — see Current state                                                           |
+
+Hide an entry that only makes sense in one interface mode with `hiddenInterfaceModes`, and hide an
+entry a resource cannot use (for example in Insert) with a `when` expression on
+`platform.project.{projectId}.isResource`, as `platform-scripture-editor`'s `menus.json` does.
+
+## Current state (as of 2026-11)
+
+The app does not follow this rule everywhere yet. Known gaps:
+
+- **The tab menu's first group is headed "Project", not the project's or resource's name.** The
+  core column `platform.app` in `defaultWebViewTopMenu` (`src/extension-host/data/menu.data.json`)
+  is labelled `%webView_project%` ("Project"), and the same heading shows on resource tabs. The menu
+  template variables (`createMenuTemplateVars` in
+  `lib/platform-bible-utils/src/context-keys/evaluate-menu.ts`) carry the project id but not its
+  name, so a column label cannot show the name today.
+- **View is still a column of the hamburger menu.** The Scripture editor's `topMenu`
+  (`extensions/src/platform-scripture-editor/contributions/menus.json`) has a View column
+  (`platformScriptureEditor.options`, holding colors, layout, zoom and footnotes pane), ordered
+  between Edit and Insert. The Markers Checklist (`platformScripture.markersChecklist`) has a View
+  column (`platformScripture.markersChecklistView`) too.
+- **There is no View menu yet.** `TabToolbar`
+  (`lib/platform-bible-react/src/components/advanced/tab-toolbar/tab-toolbar.component.tsx`) has a
+  `tabViewMenuData` slot on its end side with the right `EllipsisVertical` icon, but no caller
+  passes it (`web-view.component.tsx` and the Scripture editor's web view pass only
+  `projectMenuData`). `menus.json` has no place to contribute a view menu: `WebViewMenu` holds
+  `topMenu`, `contextMenu` and `tabMenu` only.
+- **The Scripture editor's tab menu has an Info column** (`platformScriptureEditor.info`, last). Info
+  is not one of the groups above; where its entries go is to be decided by UX.
+- **Insert is hidden on resources item by item, not as a group.** Each Insert item carries
+  `when: "!platform.project.{projectId}.isResource"`; the Insert column disappears on a resource only
+  because it ends up empty. This matches the rule, but a new Insert item without that `when` would
+  bring the group back on resource tabs.
+- **Simple and Power mode use separate Edit and Tools columns.** Simple mode shows
+  `platformScriptureEditor.simpleEdit` (one Edit submenu, header hidden) and
+  `platformScriptureEditor.simpleTools` ("Tools and resources"); Power mode shows
+  `platformScriptureEditor.edit` and `platformScriptureEditor.tools` ("Tools"). The order matches the
+  rule; extensions contributing to Tools must pick the column for each mode.
+- **Many tabs have no tab menu at all.** The generic tab toolbar is off unless a web view sets
+  `shouldShowToolbar` (it defaults to `false` in `web-view.component.tsx`), and only the Scripture
+  editor, the Markers Checklist and the enhanced resource draw a `TabToolbar` of their own. So
+  Find, Checks, Comments, Text Collection, the Bible texts and Commentaries panels, Manage books, and
+  the Dictionary in Simple mode show no hamburger menu. The inventories and the Power-mode
+  Dictionary show the generic toolbar, but their `webViewMenus` entries are empty and do not set
+  `includeDefaults`, so it has no hamburger menu either (`menu-document-combiner.ts` folds in
+  `defaultWebViewTopMenu` only when `includeDefaults` is set). The enhanced
+  resource's hamburger is a local dropdown, not wired to `menus.json`
+  (`extensions/src/platform-enhanced-resources/src/components/toolbar/toolbar.component.tsx`).
+  Which groups a tool tab (Find, Checks, inventories, Comments) uses is to be decided by UX.
+- **The macOS native menu bar** (`src/main/platform-macos-menubar.data.ts`) follows macOS
+  conventions — File, Edit, View, Tab, Text, Layout, Window and Help menus. How it maps onto this
+  rule is to be decided by UX.
