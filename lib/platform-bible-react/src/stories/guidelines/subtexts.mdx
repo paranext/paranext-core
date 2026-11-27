@@ -1,0 +1,147 @@
+import { Meta } from '@storybook/addon-docs/blocks';
+import LinkTo from '@storybook/addon-links/react';
+import { Info } from 'lucide-react';
+import { Button } from '@/components/shadcn-ui/button';
+import { Label } from '@/components/shadcn-ui/label';
+import { Switch } from '@/components/shadcn-ui/switch';
+import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from '@/components/shadcn-ui/tooltip';
+import { ExampleBlock, ExampleBlockGroup } from '@/storybook/example-block.component';
+
+<Meta title="Guidelines/Subtexts" />
+
+# Keep subtexts short — or leave them out
+
+A **subtext** is the secondary line of text under a heading, label, option, menu item, or setting
+that explains it. Long subtexts are not welcome. The best subtext is usually **no subtext**.
+
+## The principle: show less at a time
+
+Show the user only the information relevant to the decision in front of them, and nothing more.
+Every extra line is something to read, skip, or wade through before getting to the control.
+
+## Why
+
+- **Many users never read it.** Some users always skip secondary text. For them a subtext is noise
+  that pushes the controls apart and adds nothing.
+- **Others get stuck in it.** Users who do read can have their focus caught by a long sentence, or
+  by a line that wraps and breaks their eye flow down the list. They spend effort reading the
+  explanation instead of making the choice.
+- **It costs space.** Every subtext line takes vertical room, so fewer options fit on screen and
+  more scrolling is needed — which matters most in the narrow panels Paratext is used in (see
+  <LinkTo title="Guidelines/Responsiveness">Responsiveness</LinkTo>).
+- **It hides the important ones.** When every option carries a subtext, the one that really needs
+  it stops standing out.
+
+## The rule
+
+1. **Default to no subtext.** Add one only when a user would make a wrong choice without it *and*
+   none of the alternatives below can carry the message.
+2. **If you must, keep it to one short line.** A phrase, not a paragraph — aim for a few words, and
+   never more than one line at the component's normal width. No second sentence.
+3. **Never use a subtext to restate the label** in more words.
+
+## Alternatives, in order
+
+Reach for these first. They follow the ladder in
+<LinkTo title="Guidelines/Providing Help">Providing Help</LinkTo>.
+
+1. **A better label.** Most subtexts exist because the label is vague. Rename the control so it says
+   what it does, using the words the user already knows (see
+   <LinkTo title="Guidelines/Vocabulary">Vocabulary</LinkTo>).
+2. **A default that needs no explanation.** If the safe, common choice is preselected, most users
+   never need to understand the alternative.
+3. **Progressive disclosure.** Put the explanation one step away, where only the user who wants it
+   pays the reading cost:
+   - an **info icon button** with a tooltip for one or two sentences,
+   - a **dialog** or **application help** for anything longer.
+4. **Remove the option.** If an option needs a paragraph before anyone can choose it, question
+   whether it should be offered here at all.
+
+## Examples
+
+<ExampleBlockGroup>
+  <ExampleBlock
+    variant="prefer"
+    preview={
+  <div className="tw:flex tw:items-center tw:gap-2">
+    <Switch id="subtexts-prefer-autosave" defaultChecked />
+    <Label htmlFor="subtexts-prefer-autosave">Save changes automatically</Label>
+  </div>
+}
+  >
+    The label says what the switch does, and the default is the safe choice. Nothing else needs to
+    be read.
+  </ExampleBlock>
+
+  <ExampleBlock
+    variant="avoid"
+    preview={
+  <div className="tw:flex tw:flex-col tw:gap-1">
+    <div className="tw:flex tw:items-center tw:gap-2">
+      <Switch id="subtexts-avoid-autosave" defaultChecked aria-describedby="subtexts-avoid-autosave-desc" />
+      <Label htmlFor="subtexts-avoid-autosave">Auto-save</Label>
+    </div>
+    <p id="subtexts-avoid-autosave-desc" className="tw:ps-11 tw:text-xs tw:text-muted-foreground">When this is turned on, any changes that you make to the text of your project will be written to disk automatically at regular intervals so that you do not lose work if something goes wrong.</p>
+  </div>
+}
+  >
+    A vague label propped up by a paragraph. Most users skip the paragraph; the rest lose their
+    place in it.
+  </ExampleBlock>
+</ExampleBlockGroup>
+
+<ExampleBlockGroup>
+  <ExampleBlock
+    variant="prefer"
+    previewClassName="tw:pb-12"
+    preview={
+  <TooltipProvider>
+    <div className="tw:flex tw:items-center tw:gap-2">
+      <Switch id="subtexts-prefer-sync" />
+      <Label htmlFor="subtexts-prefer-sync">Send/Receive on close</Label>
+      <Tooltip open>
+        <TooltipTrigger asChild>
+          <Button variant="ghost" size="icon" aria-label="About Send/Receive on close">
+            <Info />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">Shares your changes with your team when you close Paratext.</TooltipContent>
+      </Tooltip>
+    </div>
+  </TooltipProvider>
+}
+  >
+    When an explanation is genuinely useful, put it one step away in an info button. The user who
+    wants it can find it; everyone else sees a single line.
+  </ExampleBlock>
+
+  <ExampleBlock
+    variant="avoid"
+    preview={
+  <div className="tw:flex tw:flex-col tw:gap-3">
+    <div>
+      <p className="tw:text-sm tw:font-medium">Font</p>
+      <p className="tw:text-xs tw:text-muted-foreground">Choose the font used to display text.</p>
+    </div>
+    <div>
+      <p className="tw:text-sm tw:font-medium">Font size</p>
+      <p className="tw:text-xs tw:text-muted-foreground">Choose the size of the font used to display text.</p>
+    </div>
+  </div>
+}
+  >
+    Subtexts that only restate their headings. They double the reading and the height of the list
+    without telling the user anything new.
+  </ExampleBlock>
+</ExampleBlockGroup>
+
+## When a subtext is the right call
+
+A short subtext is still the right tool when the clarification must be visible at a glance — for
+example, naming a non-obvious consequence ("Cannot be undone") or telling apart two settings whose
+labels cannot be made distinct. Keep it to one muted line and wire it to the control with
+`aria-describedby`, as described in
+<LinkTo title="Guidelines/Providing Help">Providing Help</LinkTo>.
+
+See also: <LinkTo title="Guidelines/Design Principles">Design Principles</LinkTo>;
+<LinkTo title="Guidelines/Tooltips">Tooltips</LinkTo>.
