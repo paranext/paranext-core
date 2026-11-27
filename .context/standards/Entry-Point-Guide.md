@@ -352,9 +352,9 @@ When opening dialogs via commands, specify appropriate layout:
 | `tab` | Main content area | `{ type: 'tab' }` |
 
 **Simple mode: no `float`.** When `platform.interfaceMode` is `'simple'` (treat an unreadable mode
-as Simple), never open a floating panel — anything that would float must open as a full-app dialog:
-it covers the dock area below the app toolbar, leaves the toolbar visible, and does not contain its
-own copy of it. Small centred modals (`papi.dialogs.showDialog` with `isModal: true`) are exempt. As
+as Simple), never open a floating panel — anything that would float must open as a full-app dialog: a
+modal dialog that covers the dock area below the app toolbar, leaves the toolbar visible and usable at
+least as the window's drag area, and does not contain its own copy of it. Small centred modals (`papi.dialogs.showDialog` with `isModal: true`) are exempt. As
 of 2026-11 there is no web view layout type or `papi.overlays` method for a full-app dialog, so raise
 the need with UX rather than shipping a `float`. See the Storybook guideline
 **Guidelines/No Floating Panels in Simple Mode**
