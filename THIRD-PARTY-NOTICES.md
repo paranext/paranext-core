@@ -59,8 +59,8 @@ differ — `SOURCE.md` as published upstream describes UBS's permission for the 
 more broadly than the paragraph below does — and the narrower reading below is the one this
 project relies on.
 
-UBS Dictionary of Biblical Hebrew © United Bible Societies, 2023. Adapted from Semantic Dictionary
-of Biblical Hebrew © 2000-2023 United Bible Societies. Licensed under
+UBS Dictionary of Biblical Hebrew © United Bible Societies, 2026. Adapted from Semantic Dictionary
+of Biblical Hebrew © 2000-2026 United Bible Societies. Licensed under
 [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).
 
 UBS Dictionary of the Greek New Testament © United Bible Societies, 2023. Adapted from Semantic
