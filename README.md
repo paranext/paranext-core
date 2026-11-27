@@ -488,16 +488,18 @@ These steps will walk you through releasing a version on GitHub and bumping the 
 
 2. Make sure the versions in this repo are on the version number you want to release. If they are not, manually dispatch the [Bump Versions workflow](#bumping-version-without-publishing-a-release) or run the `bump-versions` npm script to set the versions to what you want to release on the branch you want to release from.
 
-3. Manually dispatch the Publish workflow in GitHub Actions targeting the branch you want to release from. This workflow creates a new pre-release for the version you intend to release and creates a new `bump-versions-<next_version>` branch to bump the version after the release so future changes apply to a new in-progress version instead of to the already released version. This workflow has the following inputs:
+3. On the branch you want to release from, run `npm run audit:shipped` and the `dotnet list` command it prints. Together they report the npm and NuGet packages the installers ship that have published security advisories. The exceptions are the ones the script lists as not covered: the linked scripture-editors packages, and the extension zips `paratext-10-studio` adds. Audit those in their own repositories. Before you publish, update each reported package or confirm it has a Jira ticket. The script keeps reporting an advisory, and exits with 1, until it is fixed.
+
+4. Manually dispatch the Publish workflow in GitHub Actions targeting the branch you want to release from. This workflow creates a new pre-release for the version you intend to release and creates a new `bump-versions-<next_version>` branch to bump the version after the release so future changes apply to a new in-progress version instead of to the already released version. This workflow has the following inputs:
 
    - `version`: enter the version you intend to publish (e.g. 0.2.0). This is simply for verification to make sure you release the code that you intend to release. It is compared to the version in the code, and the workflow will fail if they do not match.
    - `newVersionAfterPublishing`: enter the version you want to bump to after releasing (e.g. 0.3.0-alpha.0). Future changes will apply to this new version instead of to the version that was already released. Leave blank if you don't want to bump
    - `bumpRef`: enter the Git ref you want to create the bump versions branch from, e.g. `main`. Leave blank if you want to use the branch selected for the workflow run. For example, if you release from a stable branch named `release-prep`, you may want to bump the version on `main` so future development work happens on the new version, then you can rebase `release-prep` onto `main` when you are ready to start preparing the next stable release.
    - `uploadReleaseAssets`: whether to upload the Windows and macOS installers to [Amazon S3](https://aws.amazon.com/s3/) for internal sharing. This is the only place the built installers go; the GitHub release itself carries no assets.
 
-4. In GitHub, adjust the new draft release's body and other metadata as desired, then publish the release. The release carries no installers - it is the version tag and the generated notes, which is what a downstream build constructs its own release from.
-5. Open a PR and merge the newly created `bump-versions-<next_version>` branch.
-6. Update the [Software Version Info](https://github.com/paranext/paranext/wiki/Software-Version-Info) page with information about this release.
+5. In GitHub, adjust the new draft release's body and other metadata as desired, then publish the release. The release carries no installers - it is the version tag and the generated notes, which is what a downstream build constructs its own release from.
+6. Open a PR and merge the newly created `bump-versions-<next_version>` branch.
+7. Update the [Software Version Info](https://github.com/paranext/paranext/wiki/Software-Version-Info) page with information about this release.
 
 ### Configure uploading release assets to Amazon S3
 

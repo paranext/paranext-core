@@ -423,18 +423,14 @@ async function startExtensionHost(maxWaitTimeInMS: number, isRestarting = false)
   // (extension files are watched in extension.service.ts)
 
   // We want to imitate nodemon as closely as possible to match `npm run start:extension-host`
-  // Get the nodemon watch config so we can watch files at the specified paths with the specified
-  // file extensions
+  // Get the nodemon watch config so we can watch the same folders for the same file extensions
   const nodemonConfig = await readJsonFile(path.join(globalThis.resourcesPath, 'nodemon.json'));
-  const nodemonExtensions = nodemonConfig?.ext.split(',') ?? ['ts'];
-  const nodemonWatchPaths: string[] = nodemonConfig?.watch
-    ? nodemonConfig.watch.flatMap((pathFromResources: string) => {
-        const fullGlob = path.resolve(globalThis.resourcesPath, pathFromResources);
-        return [
-          nodemonExtensions.map((extension: string) => `${fullGlob}${path.sep}*.${extension}`),
-        ];
-      })
-    : [];
+  const nodemonExtensions = new Set<string>(nodemonConfig?.ext.split(',') ?? ['ts']);
+  // chokidar watches folders, not globs, so a `folder/**` entry becomes its folder. Only those and
+  // plain folders work here: any other glob is taken as a literal path and watches nothing.
+  const nodemonWatchFolders: string[] = (nodemonConfig?.watch ?? []).map((entry: string) =>
+    path.resolve(globalThis.resourcesPath, entry.replace(/[/\\]\*\*$/, '')),
+  );
 
   const restartExtensionHostInternalDevDebounced = debounce(async () => {
     // Recorded as the restart in flight, the same way `restartExtensionHost` records its own, so a
@@ -459,9 +455,12 @@ async function startExtensionHost(maxWaitTimeInMS: number, isRestarting = false)
     // Debounce by the nodemon-configured amount
   }, nodemonConfig?.delay);
 
-  extensionHostWatcher = chokidarWatch(nodemonWatchPaths, {
+  extensionHostWatcher = chokidarWatch(nodemonWatchFolders, {
     ignoreInitial: true,
     awaitWriteFinish: true,
+    // chokidar also asks about folders, sometimes before it has their stats, so filter only files
+    ignored: (filePath, stats) =>
+      !!stats?.isFile() && !nodemonExtensions.has(path.extname(filePath).slice(1)),
   })
     .on('all', async (eventType) => {
       logger.info(
