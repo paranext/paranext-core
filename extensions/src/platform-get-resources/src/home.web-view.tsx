@@ -38,7 +38,10 @@ const SEND_RECEIVE_RETRY_MS = 2000;
  */
 type SyncReportSource = 'activity' | 'waiting' | 'sending' | 'running';
 
-globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewProps) {
+globalThis.webViewComponent = function HomeWebView({
+  id: webViewId,
+  useWebViewState,
+}: WebViewProps) {
   // Set by the web view provider from an opener's preset, and otherwise kept as the user left it.
   // The user's changes are written back so it survives window moves and reloads, and so `openHome`
   // can tell whether the filter on screen matches what a later caller asks for. See
@@ -441,6 +444,20 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
     }
   };
 
+  /**
+   * Opens an item from Home's list. In Simple mode, which shows one project at a time, the editor
+   * closes Home once a project has opened, before its "Updating project view" cover lifts, so the
+   * user lands in the project without seeing Home again. It closes Home even while a Get or Sync
+   * Home started is still running: the request goes on, but most of its failures show only in this
+   * Home's alert, so they go unseen; see `adr-home-closes-after-opening-a-project`.
+   */
+  const openItem = useCallback(
+    // Never rejects, so an open that fails leaves nothing unhandled.
+    async (projectId: string, isPublished: boolean) =>
+      openHomeItem(projectId, isPublished, webViewId),
+    [webViewId],
+  );
+
   const removeFromSyncQueue = useCallback(
     async (projectId: string) => {
       try {
@@ -606,7 +623,7 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
       localizedStringsWithLoadingState={localizedStringsWithLoadingState}
       uiLocales={uiLocales}
       onOpenGetResources={openGetResources}
-      onOpenProject={openHomeItem}
+      onOpenProject={openItem}
       onSendReceiveProject={sendReceiveProject}
       onRemoveFromQueue={removeFromSyncQueue}
       onGetStarted={getStarted}

@@ -92,6 +92,27 @@ export interface WebViewServiceType {
     options?: ReloadWebViewOptions,
   ): Promise<WebViewId | undefined>;
 
+  /**
+   * Closes an open WebView, in whichever window holds it, the same way the user closing its tab
+   * does: {@link WebViewServiceType.onDidCloseWebView} fires, and a window whose dock this leaves
+   * with no tab docked gets Home docked in it or closes, as after the user's own close.
+   *
+   * A WebView can close itself by passing its own id (`WebViewProps.id`). Make this the last thing
+   * it does: the close can tear down the WebView's iframe before the returned promise settles, so
+   * code after it may never run.
+   *
+   * @param webViewId The ID of the WebView to close
+   * @returns Promise that resolves to `true` if the WebView was closed, or `false` if no window had
+   *   it open
+   * @throws If the WebView's tab is one the user cannot close (`isClosable: false`), such as the
+   *   tabs that make up Simple mode's layout
+   * @throws If no window claimed the WebView and some window could not be asked. The WebView may be
+   *   in the window that did not answer, so `false` there would be indistinguishable from the
+   *   WebView genuinely not being open.
+   * @experimental This method is new and may change
+   */
+  closeWebView(webViewId: WebViewId): Promise<boolean>;
+
   /** @deprecated 6 November 2024. Renamed to {@link getOpenWebViewDefinition} */
   getSavedWebViewDefinition(webViewId: string): Promise<SavedWebViewDefinition | undefined>;
 

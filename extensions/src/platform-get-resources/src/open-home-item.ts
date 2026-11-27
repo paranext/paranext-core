@@ -48,10 +48,24 @@ async function openResource(projectId: string): Promise<void> {
  * the title bar's route to a project that is not in that list yet, so a project opened here has to
  * join it — otherwise the escape hatch for finding a non-recent project never makes it recent.
  *
+ * In Simple mode the editor closes the view named by `webViewIdToClose` once the project has
+ * opened, and records the project itself; the recording below then never runs, as the view is
+ * gone.
+ *
  * @param projectId The project's id
+ * @param webViewIdToClose The view the project is being opened from
+ * @throws If the project did not open, including when the editor answered with no web view: it
+ *   gives no reason then, so it is reported like any other failed open.
  */
-async function openProject(projectId: string): Promise<void> {
-  await papi.commands.sendCommand('platformScriptureEditor.openScriptureEditor', projectId);
+async function openProject(projectId: string, webViewIdToClose?: string): Promise<void> {
+  const webViewId = await papi.commands.sendCommand(
+    'platformScriptureEditor.openScriptureEditor',
+    projectId,
+    undefined,
+    undefined,
+    webViewIdToClose,
+  );
+  if (webViewId === undefined) throw new Error('the editor opened nothing for it');
   try {
     const recentlyOpenedProjects = await papi.dataProviders.get(
       'platformScripture.recentlyOpenedProjects',
@@ -71,11 +85,17 @@ async function openProject(projectId: string): Promise<void> {
  *
  * @param projectId The row's project id
  * @param isPublished Whether the row is a resource
+ * @param homeWebViewId Home's own web view id. In Simple mode, opening a project closes Home; a
+ *   resource never does.
  */
-export async function openHomeItem(projectId: string, isPublished: boolean): Promise<void> {
+export async function openHomeItem(
+  projectId: string,
+  isPublished: boolean,
+  homeWebViewId?: string,
+): Promise<void> {
   try {
     if (isPublished) await openResource(projectId);
-    else await openProject(projectId);
+    else await openProject(projectId, homeWebViewId);
   } catch (e) {
     await reportCouldNotOpen('Home', projectId, e);
   }

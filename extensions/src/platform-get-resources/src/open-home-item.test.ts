@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   getSetting: vi.fn(async (): Promise<unknown> => 'power'),
   recordProjectOpened: vi.fn(async () => undefined),
   notify: vi.fn(async () => 'notification-1'),
+  warn: vi.fn(),
 }));
 
 vi.mock('@papi/frontend', () => ({
@@ -18,7 +19,7 @@ vi.mock('@papi/frontend', () => ({
       get: vi.fn(async () => ({ recordProjectOpened: mocks.recordProjectOpened })),
     },
   },
-  logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+  logger: { debug: vi.fn(), info: vi.fn(), warn: mocks.warn, error: vi.fn() },
 }));
 
 // vi.mock must appear before the imports it mocks so Vitest can hoist it; eslint's import/first
@@ -148,6 +149,7 @@ describe('openHomeItem', () => {
 
   it('opens a project in the Scripture editor in Simple mode and remembers it', async () => {
     mocks.getSetting.mockImplementation(async () => 'simple');
+    mocks.sendCommand.mockImplementation(async () => 'editor-1');
 
     await openHomeItem('project-1', false);
 
@@ -159,6 +161,76 @@ describe('openHomeItem', () => {
     await openHomeItem('resource-1', true);
 
     expect(mocks.recordProjectOpened).not.toHaveBeenCalled();
+  });
+});
+
+/*
+ * In Simple mode the editor closes Home once a project opened from it has opened, before the
+ * "Updating project view" cover lifts, so Home is never seen in front of the project. Home only
+ * names itself; the editor decides, and Home records the project itself only while it is still open.
+ */
+describe('openHomeItem closing the view it was opened from', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.getSetting.mockImplementation(async () => 'simple');
+    mocks.recordProjectOpened.mockImplementation(async () => undefined);
+  });
+
+  it('names the view to close when it opens a project', async () => {
+    mocks.sendCommand.mockImplementation(async () => 'editor-1');
+
+    await openHomeItem('project-1', false, 'home-1');
+
+    expect(mocks.sendCommand).toHaveBeenCalledWith(
+      'platformScriptureEditor.openScriptureEditor',
+      'project-1',
+      undefined,
+      undefined,
+      'home-1',
+    );
+  });
+
+  it('names no view to close for a resource', async () => {
+    mocks.sendCommand.mockImplementation(async () => ({ status: 'shown', webViewId: 'tab-1' }));
+
+    await openHomeItem('resource-1', true, 'home-1');
+
+    expect(mocks.sendCommand.mock.calls.flat()).not.toContain('home-1');
+  });
+
+  it('warns the user when the project could not be opened', async () => {
+    mocks.sendCommand.mockImplementation(async () => {
+      throw new Error('editor unavailable');
+    });
+
+    await expect(openHomeItem('project-1', false, 'home-1')).resolves.toBeUndefined();
+    expect(mocks.notify).toHaveBeenCalledTimes(1);
+    expect(mocks.notify).toHaveBeenCalledWith(
+      expect.objectContaining({ message: '%resources_couldNotOpen%' }),
+    );
+  });
+
+  it('treats an open that showed nothing as a failed open', async () => {
+    mocks.sendCommand.mockImplementation(async () => undefined);
+
+    await openHomeItem('project-1', false, 'home-1');
+
+    expect(mocks.notify).toHaveBeenCalledTimes(1);
+    expect(mocks.notify).toHaveBeenCalledWith(
+      expect.objectContaining({ message: '%resources_couldNotOpen%' }),
+    );
+    expect(mocks.warn).toHaveBeenCalledWith(expect.stringContaining('opened nothing'));
+    expect(mocks.recordProjectOpened).not.toHaveBeenCalled();
+  });
+
+  it('does not reject when the project opened but could not be recorded as recent', async () => {
+    mocks.sendCommand.mockImplementation(async () => 'editor-1');
+    mocks.recordProjectOpened.mockImplementation(async () => {
+      throw new Error('recent list unavailable');
+    });
+
+    await expect(openHomeItem('project-1', false, 'home-1')).resolves.toBeUndefined();
+    expect(mocks.notify).not.toHaveBeenCalled();
   });
 });
 

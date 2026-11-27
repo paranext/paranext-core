@@ -37,11 +37,14 @@ Terse decisions (choice → what to avoid → one-line why). Add only the net-ne
   - Avoid: class components; HOCs for state management.
   - Why: modern React, simpler testing, cleaner code.
 
-### Web view self-close (stopgap)
+### Web view self-close
 
-- **A web view closes itself with a DOM walk** (PAPI has no self-close method yet): from `window.top.document`, find the iframe whose `contentWindow === window`, walk up to the enclosing `.dock-panel`, then click `.dock-tab-active .dock-tab-close-btn`.
-  - Avoid: re-deriving this each time; relying on it long-term once a PAPI self-close ships.
-  - Why: documented stopgap until `papi.webViews.closeSelf()` exists on `@papi/frontend`. Web views are same-origin iframes, so `top.document` walking works; it is fragile against rc-dock DOM changes, so it is recorded here so agents don't re-invent it.
+- **A web view is closed with `papi.webViews.closeWebView`**, given its id (`WebViewProps.id`). A web view that closes once something it started has finished passes its id to whatever finishes the work, so the close lands before that work shows its result — Home passes its id to `platformScriptureEditor.openScriptureEditor` as `webViewIdToCloseOnOpen`, and the editor closes Home before its "Updating project view" cover lifts (`finishOpenFromView`, `extensions/src/platform-scripture-editor/src/close-view-opened-from.util.ts`). A web view that calls it on itself does so as the last thing it does.
+  - Avoid:
+    - clicking the tab's close button in `window.top.document` — it breaks silently with rc-dock's markup, and extensions should not reach into the host page.
+    - closing itself after the work's answer arrives when the work shows its own result first — the view is seen in front of that result for the round trips in between.
+    - code after a call that closes the caller — the close can tear down the caller's iframe before the promise settles.
+  - Why: the router closes it in whichever window holds it, the same way the user's close does, so `onDidCloseWebView` fires. See `adr-home-closes-after-opening-a-project`.
 
 ### Single-instance web views
 

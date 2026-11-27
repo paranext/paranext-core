@@ -929,12 +929,20 @@ declare module 'papi-shared-types' {
      *   editor. Honored in `platform.interfaceMode === 'power'`. Ignored in `platform.interfaceMode
      *   === 'simple'` — every open routes to the editor column regardless of which tab the caller
      *   named.
+     * @param webViewIdToCloseOnOpen Optional ID of the web view the user opened the project from,
+     *   such as Home. Honored in `platform.interfaceMode === 'simple'` only: once the project has
+     *   opened, that web view is closed before the "Updating project view" cover lifts, so it is
+     *   never seen in front of the project, and the project is recorded as recently opened, which
+     *   the closed web view can no longer do. Nothing is closed when the open fails. The close can
+     *   tear down the caller before this command answers, so a caller passing its own ID must not
+     *   rely on code after the call.
      * @returns WebView id for new editor WebView or `undefined` if the user canceled the dialog
      */
     'platformScriptureEditor.openScriptureEditor': (
       projectId?: string | undefined,
       options?: OpenEditorOptions,
       existingTabIdToReplace?: string,
+      webViewIdToCloseOnOpen?: string,
     ) => Promise<string | undefined>;
 
     /**

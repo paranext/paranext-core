@@ -5412,6 +5412,57 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** PT-4262 implementation (PR #2632), where the review asked why the mandated dependency
   was not used.
 
+## adr-home-closes-after-opening-a-project: In Simple mode, the editor closes Home through a new `papi.webViews.closeWebView` once a project opened from it has opened, before the "Updating project view" cover lifts
+
+- **Date:** 2026-11-23
+- **Status:** Accepted
+- **Context:** Simple mode shows one project at a time, so a user who opens a project from Home was
+  left looking at Home with the project open behind it. The product owner asked for Home to close
+  once a project from it has opened — only Home, only in Simple, with no general "close after use"
+  mechanism for other windows. PAPI had no way to close a web view: `papi.webViews` could open,
+  reload and read web views, and the renderer's `closeTab` was not exposed.
+- **Decision:** Add `papi.webViews.closeWebView(webViewId)`, marked `@experimental`. The main
+  process's web view router sends it to the window that holds the web view, as it does
+  `reloadWebView`; with no such window it answers `false`, and with a window it could not ask it
+  throws rather than fall back to the focused window. That window's shard waits out a layout load
+  in flight, as the move's close half does, so the load cannot put the web view back, then removes
+  its tab, and `onDidCloseWebView` fires as for the user's own close. It refuses a tab the user
+  cannot close (`isClosable: false`), such as Simple mode's fixed columns. Home passes its own id
+  to `platformScriptureEditor.openScriptureEditor` as `webViewIdToCloseOnOpen` whenever it opens a
+  project. In Simple mode the editor closes that web view once its own open has succeeded and only
+  then lifts the "Updating project view" overlay (`finishOpenFromView`), so Home is gone before the
+  project shows; it does so whether or not a Get or Sync that Home started is still running. A
+  failed open, including an editor that answers with no web view, closes nothing and the user is
+  told. Because the closed Home can no longer record the project as recently opened, the editor
+  records it after closing Home; when the close fails Home is still open and records it itself.
+  The editor's open command also returns without waiting for Find and Checks to follow the new
+  project.
+- **Alternatives:** **Click Home's own tab close button in `window.top.document`** — no new API,
+  but it breaks silently with rc-dock's tab markup, has an extension reach into the host page's DOM,
+  and relies on same-origin web views reaching `window.top` (PT-2649). **Home closes itself once the
+  editor's open command answers** — the first version: the overlay lifts before the answer reaches
+  Home, so Home showed in front of the project for the round trips between the overlay lifting and
+  the close, which the product owner did not want. **Keep the overlay up until Home reports it has
+  closed** — the overlay is released by the editor's own did-finish event, so this needs a second
+  handshake across three processes for one caller. **Keep Home open while a Get or Sync it started
+  is running** — the product owner's first choice, reversed after seeing it: Home coming back once
+  the overlay lifted was unexpected. **Report a later failure of such a request as a
+  notification** — not now: the product owner is designing how sync status shows generally, and
+  asked for nothing more here. **Leave Home open while it is its window's last docked tab** — Home
+  cannot see the dock through PAPI, and closing it then does what the user's own close does (Home
+  is docked again, or the window closes).
+- **Consequences:** Any extension can now close an open web view by id, except one whose tab the
+  user cannot close, and any caller of `openScriptureEditor` can name the web view it opened from
+  to have it closed the same way. The overlay stays up for one close round trip longer; the project
+  is usable at about the same moment as before. With several opens from Home running at once, the
+  first to succeed closes Home; an open still running then goes on, but if it fails the user is not
+  told, since its failure would have shown from Home. A Get or Sync started from Home that fails
+  after Home closed is not reported unless its failure has a notification of its own, until that
+  sync status design lands. Find and Checks can still be following the previous project for about a
+  second after the open command answers; overlapping switches could already interleave these
+  updates, since the overlay lifts before them.
+- **Source:** PT-4829.
+
 ## adr-implied-paragraph-reports-p-and-bar-follows-top-level-block: Verses outside any paragraph marker report `p`, and the character-marker bar follows the caret's top-level block
 
 - **Date:** 2026-11-12

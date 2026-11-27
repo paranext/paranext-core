@@ -172,6 +172,23 @@
       "src/renderer/components/overlays/overlay-workspace-updating.component.tsx"
     ]
   },
+  "home-closes-after-open-simple.spec.ts": {
+    "main": [
+      "extensions/src/platform-get-resources/src/home.web-view.tsx",
+      "extensions/src/platform-get-resources/src/open-home-item.ts",
+      "extensions/src/platform-scripture-editor/src/close-view-opened-from.util.ts",
+      "extensions/src/platform-scripture-editor/src/main.ts",
+      "src/main/services/web-view.service-router.ts",
+      "src/renderer/services/web-view.service-shard.ts",
+      "src/shared/services/web-view.service-model.ts"
+    ],
+    "incidental": [
+      "extensions/src/platform-scripture-editor/src/platform-scripture-editor.utils.ts",
+      "src/renderer/components/overlays/overlay-workspace-updating.component.tsx",
+      "src/renderer/components/docking/simple-layout.builder.ts",
+      "src/renderer/components/docking/simple-layout.data.ts"
+    ]
+  },
   "internet-settings.spec.ts": {
     "main": [
       "extensions/src/paratext-registration/",
