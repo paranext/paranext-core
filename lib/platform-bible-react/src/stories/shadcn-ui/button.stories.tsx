@@ -3,6 +3,12 @@ import { expect, fn } from 'storybook/test';
 import { X } from 'lucide-react';
 import { Button } from '@/components/shadcn-ui/button';
 import { Input } from '@/components/shadcn-ui/input';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/shadcn-ui/tooltip';
 
 const meta: Meta<typeof Button> = {
   title: 'Shadcn/Button',
@@ -96,7 +102,16 @@ export const SizesDemo: Story = {
       </div>
       <div className="tw:flex tw:items-center tw:gap-2">
         <span className="tw:text-sm">icon:</span>
-        <Button size="icon">★</Button>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button size="icon" aria-label="Favorite">
+                ★
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Favorite</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </div>
     </div>
   ),
@@ -313,15 +328,22 @@ export const PressNudgeWithCallerTranslate: Story = {
   render: () => (
     <div className="tw:relative tw:w-64">
       <Input aria-label="Search" className="tw:w-full tw:ps-2 tw:pe-8" defaultValue="Search term" />
-      <Button
-        aria-label="Clear search"
-        className="tw:absolute tw:end-1 tw:top-1/2 tw:-translate-y-1/2"
-        onClick={fn()}
-        size="icon-xs"
-        variant="ghost"
-      >
-        <X />
-      </Button>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              aria-label="Clear search"
+              className="tw:absolute tw:end-1 tw:top-1/2 tw:-translate-y-1/2"
+              onClick={fn()}
+              size="icon-xs"
+              variant="ghost"
+            >
+              <X />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Clear search</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
     </div>
   ),
   parameters: {

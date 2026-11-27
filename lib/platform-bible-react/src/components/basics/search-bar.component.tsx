@@ -1,5 +1,12 @@
 import { Button } from '@/components/shadcn-ui/button';
 import { Input } from '@/components/shadcn-ui/input';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/shadcn-ui/tooltip';
+import { resolveLocalizedString } from '@/utils/localization.util';
 import { Direction, readDirection } from '@/utils/dir-helper.util';
 import { cn } from '@/utils/shadcn-ui/utils';
 import { Search, X } from 'lucide-react';
@@ -30,6 +37,12 @@ export type SearchBarProps = {
 
   /** Optional id for the root element */
   id?: string;
+
+  /**
+   * Localized accessible name and tooltip of the button that clears the search query. Defaults to
+   * `Clear search`.
+   */
+  clearButtonLabel?: string;
 };
 
 /**
@@ -46,10 +59,25 @@ export type SearchBarProps = {
  *   search bar
  * @param {boolean} [props.isDisabled] - Optional boolean to disable the search bar
  * @param {string} [props.id] - Optional id for the root element
+ * @param {string} [props.clearButtonLabel] - Localized accessible name and tooltip of the clear
+ *   button
  */
 export const SearchBar = forwardRef<HTMLInputElement, SearchBarProps>(
-  ({ value, onSearch, placeholder, isFullWidth, className, isDisabled = false, id }, inputRef) => {
+  (
+    {
+      value,
+      onSearch,
+      placeholder,
+      isFullWidth,
+      className,
+      isDisabled = false,
+      id,
+      clearButtonLabel,
+    },
+    inputRef,
+  ) => {
     const dir: Direction = readDirection();
+    const clearLabel = resolveLocalizedString(clearButtonLabel, 'Clear search');
 
     return (
       <div
@@ -77,21 +105,28 @@ export const SearchBar = forwardRef<HTMLInputElement, SearchBarProps>(
           disabled={isDisabled}
         />
         {value && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className={cn(
-              'tw:absolute tw:inset-y-0 tw:my-auto tw:h-7 tw:@max-[4rem]/search:hidden',
-              { 'tw:left-0': dir === 'rtl' },
-              { 'tw:right-0': dir === 'ltr' },
-            )}
-            onClick={() => {
-              onSearch('');
-            }}
-          >
-            <X className="tw:h-4 tw:w-4" />
-            <span className="tw:sr-only">Clear</span>
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={cn(
+                    'tw:absolute tw:inset-y-0 tw:my-auto tw:h-7 tw:@max-[4rem]/search:hidden',
+                    { 'tw:left-0': dir === 'rtl' },
+                    { 'tw:right-0': dir === 'ltr' },
+                  )}
+                  aria-label={clearLabel}
+                  onClick={() => {
+                    onSearch('');
+                  }}
+                >
+                  <X className="tw:h-4 tw:w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{clearLabel}</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         )}
       </div>
     );

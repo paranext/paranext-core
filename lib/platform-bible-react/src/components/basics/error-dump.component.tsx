@@ -1,5 +1,11 @@
 import { Copy } from 'lucide-react';
 import { Button } from '@/components/shadcn-ui/button';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/shadcn-ui/tooltip';
 import { LocalizedStringValue } from 'platform-bible-utils';
 
 /**
@@ -85,16 +91,23 @@ export function ErrorDump({
             {infoMessage}
           </div>
         </div>
-        <Button
-          variant="secondary"
-          size="icon"
-          aria-label={copyButtonLabel}
-          onClick={() => {
-            handleCopy();
-          }}
-        >
-          <Copy />
-        </Button>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="secondary"
+                size="icon"
+                aria-label={copyButtonLabel}
+                onClick={() => {
+                  handleCopy();
+                }}
+              >
+                <Copy />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{copyButtonLabel}</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </div>
       <div className="tw:prose tw:w-full">
         <pre className="tw:text-xs">{errorDetails}</pre>

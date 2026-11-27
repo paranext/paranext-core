@@ -1391,34 +1391,48 @@ export function Find({
               "1 of 12" over an empty results area, with navigation that still drives the editor.
               Navigating the scroll group into extra material makes that the common path. */}
           {isSearchQueryValid && visibleResults.length > 0 && (
-            <div className="tw:flex tw:shrink-0 tw:items-center tw:gap-1">
-              <span className="tw:text-sm tw:text-muted-foreground tw:tabular-nums">
-                {formatReplacementString(localizedStrings['%general_countOfTotal%'], {
-                  count: focusedVisibleIndex >= 0 ? String(focusedVisibleIndex + 1) : '–',
-                  total: String(visibleResults.length),
-                })}
-              </span>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="tw:h-7 tw:w-7"
-                disabled={visibleResults.length === 0}
-                onClick={handlePreviousResult}
-                aria-label={localizedStrings['%webView_find_previousResult%']}
-              >
-                <ChevronUp className="tw:h-4 tw:w-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="tw:h-7 tw:w-7"
-                disabled={visibleResults.length === 0}
-                onClick={handleNextResult}
-                aria-label={localizedStrings['%webView_find_nextResult%']}
-              >
-                <ChevronDown className="tw:h-4 tw:w-4" />
-              </Button>
-            </div>
+            <TooltipProvider>
+              <div className="tw:flex tw:shrink-0 tw:items-center tw:gap-1">
+                <span className="tw:text-sm tw:text-muted-foreground tw:tabular-nums">
+                  {formatReplacementString(localizedStrings['%general_countOfTotal%'], {
+                    count: focusedVisibleIndex >= 0 ? String(focusedVisibleIndex + 1) : '–',
+                    total: String(visibleResults.length),
+                  })}
+                </span>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="tw:h-7 tw:w-7"
+                      disabled={visibleResults.length === 0}
+                      onClick={handlePreviousResult}
+                      aria-label={localizedStrings['%webView_find_previousResult%']}
+                    >
+                      <ChevronUp className="tw:h-4 tw:w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    {localizedStrings['%webView_find_previousResult%']}
+                  </TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="tw:h-7 tw:w-7"
+                      disabled={visibleResults.length === 0}
+                      onClick={handleNextResult}
+                      aria-label={localizedStrings['%webView_find_nextResult%']}
+                    >
+                      <ChevronDown className="tw:h-4 tw:w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>{localizedStrings['%webView_find_nextResult%']}</TooltipContent>
+                </Tooltip>
+              </div>
+            </TooltipProvider>
           )}
         </div>
       </div>

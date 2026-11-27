@@ -2,8 +2,11 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
   type RefObject,
+  createContext,
   useCallback,
+  useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react';
@@ -24,6 +27,13 @@ import {
 import { type IndexedListItem, type SemanticDomain } from 'platform-bible-react/experimental';
 import { ArrowUp, ChevronRight, MoreHorizontal } from 'lucide-react';
 import type { ErDictionaryFilteredListProps } from './er-dictionary-filtered-list.types';
+
+/** Localized labels for the tree's expand/collapse toggle, provided once and read by every node. */
+type TreeToggleLabels = { expandLabel: string; collapseLabel: string };
+const TreeToggleLabelsContext = createContext<TreeToggleLabels>({
+  expandLabel: '',
+  collapseLabel: '',
+});
 
 /** Minimum width in pixels for the list panel when shown side-by-side with details. */
 const LIST_MIN_PX = 100;
@@ -49,6 +59,8 @@ export default function ErDictionaryFilteredList<T extends IndexedListItem>({
   allDomains,
   onDomainChange,
   onClose,
+  expandLabel,
+  collapseLabel,
   className,
 }: ErDictionaryFilteredListProps<T>) {
   const [selectedId, setSelectedId] = useState<string | undefined>(selectedItemId);
@@ -231,41 +243,50 @@ export default function ErDictionaryFilteredList<T extends IndexedListItem>({
   };
   const listElement = renderListBody();
 
-  return (
-    <div className={cn('tw:flex tw:h-full tw:flex-col tw:overflow-hidden', className)}>
-      {/* Header: breadcrumbs + back */}
-      <div className="tw:flex tw:items-center tw:gap-1 tw:border-b tw:px-2 tw:py-1.5">
-        <div className="tw:min-w-0 tw:flex-1">
-          <BreadcrumbBar
-            path={domainPath}
-            allDomains={allDomains}
-            onDomainSelect={handleDomainSelect}
-          />
-        </div>
-        {onClose && (
-          <Button variant="ghost" size="sm" className="tw:shrink-0 tw:gap-1" onClick={onClose}>
-            <ArrowUp className="tw:h-4 tw:w-4" />
-            Back
-          </Button>
-        )}
-      </div>
+  const treeToggleLabels = useMemo(
+    () => ({ expandLabel, collapseLabel }),
+    [expandLabel, collapseLabel],
+  );
 
-      {/* Inline list + detail */}
-      <div ref={containerRef} className="tw:relative tw:flex tw:flex-1 tw:overflow-hidden">
-        {renderListAndDetail({
-          showSideBySide: !!showSideBySide,
-          showFullDetail: !!showFullDetail,
-          listElement,
-          detailElement:
-            selectedItem && renderDetailContent
-              ? renderDetailContent(selectedItem, handleCloseDetail)
-              : undefined,
-          listMinPct,
-          detailMinPct,
-          detailPanelRef,
-        })}
-      </div>
-    </div>
+  return (
+    <TreeToggleLabelsContext.Provider value={treeToggleLabels}>
+      <TooltipProvider>
+        <div className={cn('tw:flex tw:h-full tw:flex-col tw:overflow-hidden', className)}>
+          {/* Header: breadcrumbs + back */}
+          <div className="tw:flex tw:items-center tw:gap-1 tw:border-b tw:px-2 tw:py-1.5">
+            <div className="tw:min-w-0 tw:flex-1">
+              <BreadcrumbBar
+                path={domainPath}
+                allDomains={allDomains}
+                onDomainSelect={handleDomainSelect}
+              />
+            </div>
+            {onClose && (
+              <Button variant="ghost" size="sm" className="tw:shrink-0 tw:gap-1" onClick={onClose}>
+                <ArrowUp className="tw:h-4 tw:w-4" />
+                Back
+              </Button>
+            )}
+          </div>
+
+          {/* Inline list + detail */}
+          <div ref={containerRef} className="tw:relative tw:flex tw:flex-1 tw:overflow-hidden">
+            {renderListAndDetail({
+              showSideBySide: !!showSideBySide,
+              showFullDetail: !!showFullDetail,
+              listElement,
+              detailElement:
+                selectedItem && renderDetailContent
+                  ? renderDetailContent(selectedItem, handleCloseDetail)
+                  : undefined,
+              listMinPct,
+              detailMinPct,
+              detailPanelRef,
+            })}
+          </div>
+        </div>
+      </TooltipProvider>
+    </TreeToggleLabelsContext.Provider>
   );
 }
 
@@ -885,6 +906,8 @@ function TreeNode({
   isScrollTarget: boolean;
 }) {
   const [expanded, setExpanded] = useState(defaultExpanded);
+  const { expandLabel, collapseLabel } = useContext(TreeToggleLabelsContext);
+  const toggleLabel = expanded ? collapseLabel : expandLabel;
 
   useEffect(() => {
     if (defaultExpanded) setExpanded(true);
@@ -930,19 +953,24 @@ function TreeNode({
         ) : (
           <>
             {hasChildren ? (
-              <button
-                type="button"
-                className="tw:flex tw:h-5 tw:w-5 tw:shrink-0 tw:items-center tw:justify-center tw:rounded tw:hover:bg-muted tw:focus:outline-none tw:focus:ring-1 tw:focus:ring-ring"
-                aria-expanded={expanded}
-                aria-label={expanded ? 'Collapse' : 'Expand'}
-                onClick={() => setExpanded(!expanded)}
-              >
-                <ChevronRight
-                  className={cn('tw:h-3 tw:w-3 tw:transition-transform', {
-                    'tw:rotate-90': expanded,
-                  })}
-                />
-              </button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    className="tw:flex tw:h-5 tw:w-5 tw:shrink-0 tw:items-center tw:justify-center tw:rounded tw:hover:bg-muted tw:focus:outline-none tw:focus:ring-1 tw:focus:ring-ring"
+                    aria-expanded={expanded}
+                    aria-label={toggleLabel}
+                    onClick={() => setExpanded(!expanded)}
+                  >
+                    <ChevronRight
+                      className={cn('tw:h-3 tw:w-3 tw:transition-transform', {
+                        'tw:rotate-90': expanded,
+                      })}
+                    />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>{toggleLabel}</TooltipContent>
+              </Tooltip>
             ) : (
               <span className="tw:w-5 tw:shrink-0" />
             )}

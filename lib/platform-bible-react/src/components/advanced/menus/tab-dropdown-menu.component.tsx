@@ -538,57 +538,71 @@ export default function TabDropdownMenu({
       if (pickedItem) onSelectMenuItem(pickedItem as MenuItemContainingCommand);
     };
     return (
-      <Button
-        ref={triggerRef}
-        id={id}
-        aria-label={tabLabel}
-        aria-haspopup="menu"
-        aria-expanded={isOverlayOpen}
-        variant={buttonVariant}
-        size="icon"
-        className={cn(QUIET_FOCUS_RING_SUPPRESSION, className)}
-        onPointerDown={() => {
-          wasOverlayOpenAtPointerDownRef.current = isOverlayOpen;
-        }}
-        onClick={(event) => {
-          // A click that Enter or Space produced carries no click count, and no pointer-down
-          const isFromKeyboard = event.detail === 0;
-          // Known limitation: a quick double-click leaves the menu open. The overlay service ignores
-          // closes for a short grace period after a menu opens (OVERLAY_CREATION_GRACE_MS), so the
-          // second press does not dismiss it, and this check then skips the click. The next click
-          // anywhere closes the menu.
-          if (!isFromKeyboard && wasOverlayOpenAtPointerDownRef.current) return;
-          openOverlay(isFromKeyboard);
-        }}
-        onKeyDown={(event) => {
-          restoreFocusRing();
-          // Like a dropdown trigger, ArrowDown opens the menu too
-          if (event.key === 'ArrowDown') {
-            event.preventDefault();
-            openOverlay(true);
-          }
-        }}
-        onBlur={restoreFocusRing}
-      >
-        {icon ?? <MenuIcon />}
-      </Button>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              ref={triggerRef}
+              id={id}
+              aria-label={tabLabel}
+              aria-haspopup="menu"
+              aria-expanded={isOverlayOpen}
+              variant={buttonVariant}
+              size="icon"
+              className={cn(QUIET_FOCUS_RING_SUPPRESSION, className)}
+              onPointerDown={() => {
+                wasOverlayOpenAtPointerDownRef.current = isOverlayOpen;
+              }}
+              onClick={(event) => {
+                // A click that Enter or Space produced carries no click count, and no pointer-down
+                const isFromKeyboard = event.detail === 0;
+                // Known limitation: a quick double-click leaves the menu open. The overlay service ignores
+                // closes for a short grace period after a menu opens (OVERLAY_CREATION_GRACE_MS), so the
+                // second press does not dismiss it, and this check then skips the click. The next click
+                // anywhere closes the menu.
+                if (!isFromKeyboard && wasOverlayOpenAtPointerDownRef.current) return;
+                openOverlay(isFromKeyboard);
+              }}
+              onKeyDown={(event) => {
+                restoreFocusRing();
+                // Like a dropdown trigger, ArrowDown opens the menu too
+                if (event.key === 'ArrowDown') {
+                  event.preventDefault();
+                  openOverlay(true);
+                }
+              }}
+              onBlur={restoreFocusRing}
+            >
+              {icon ?? <MenuIcon />}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{tabLabel}</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
     );
   }
 
   return (
     <DropdownMenu variant={variant}>
-      <DropdownMenuTrigger aria-label={tabLabel} className={className} asChild id={id}>
-        <Button
-          ref={triggerRef}
-          variant={buttonVariant}
-          size="icon"
-          className={QUIET_FOCUS_RING_SUPPRESSION}
-          onKeyDown={restoreFocusRing}
-          onBlur={restoreFocusRing}
-        >
-          {icon ?? <MenuIcon />}
-        </Button>
-      </DropdownMenuTrigger>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <DropdownMenuTrigger aria-label={tabLabel} className={className} asChild id={id}>
+              <Button
+                ref={triggerRef}
+                variant={buttonVariant}
+                size="icon"
+                className={QUIET_FOCUS_RING_SUPPRESSION}
+                onKeyDown={restoreFocusRing}
+                onBlur={restoreFocusRing}
+              >
+                {icon ?? <MenuIcon />}
+              </Button>
+            </DropdownMenuTrigger>
+          </TooltipTrigger>
+          <TooltipContent>{tabLabel}</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
       <DropdownMenuContent
         align="start"
         style={{ zIndex: Z_INDEX_ABOVE_DOCK }}

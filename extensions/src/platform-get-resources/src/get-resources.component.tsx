@@ -37,6 +37,10 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
 } from 'platform-bible-react';
 import {
   buildLanguageFilterOptions,
@@ -68,14 +72,17 @@ import { getInternetBlockedMessageKey } from './internet-block-notification.util
 export const GET_RESOURCES_STRING_KEYS = Object.freeze([
   '%data_loading_error_internetAccess_disabled_3%',
   '%general_error_title%',
+  '%general_moreOptions%',
   '%resources_action%',
   '%resources_actionDidNotTakeEffect%',
   '%resources_any_language%',
   '%resources_any_type%',
+  '%resources_clearSearch%',
   '%resources_dialog_subtitle%',
   '%resources_dialog_title%',
   '%resources_downloadsUnavailable%',
   '%resources_filterBy%',
+  '%resources_filter_removeItem%',
   '%resources_fullName%',
   '%resources_get%',
   '%resources_installed%',
@@ -397,10 +404,12 @@ export function GetResources({
   const actionText: string = getLocalizedString('%resources_action%');
   const anyLanguage: string = getLocalizedString('%resources_any_language%');
   const anyType: string = getLocalizedString('%resources_any_type%');
+  const clearSearchText: string = getLocalizedString('%resources_clearSearch%');
   const dialogSubtitleText: string = getLocalizedString('%resources_dialog_subtitle%');
   const dialogTitleText: string = getLocalizedString('%resources_dialog_title%');
   const filterInputText: string = getLocalizedString('%resources_filterInput_searchPlaceholder%');
   const filterByText: string = getLocalizedString('%resources_filterBy%');
+  const removeFilterItemText: string = getLocalizedString('%resources_filter_removeItem%');
   const fullNameText: string = getLocalizedString('%resources_fullName%');
   const getText: string = getLocalizedString('%resources_get%');
   const installedText: string = getLocalizedString('%resources_installed%');
@@ -411,6 +420,7 @@ export function GetResources({
     '%resources_languages_searchPlaceholder%',
   );
   const languagesNoResultsText: string = getLocalizedString('%resources_languages_noResults%');
+  const moreOptionsText: string = getLocalizedString('%general_moreOptions%');
   const noResultsText: string = getLocalizedString('%resources_noResults%');
   const noResultsErrorText: string = getLocalizedString('%resources_noResultsError%');
   const retryText: string = getLocalizedString('%resources_retry%');
@@ -641,6 +651,7 @@ export function GetResources({
                   className="tw:min-w-72"
                   onSearch={setTextFilter}
                   placeholder={filterInputText}
+                  clearButtonLabel={clearSearchText}
                 />
               </div>
             </div>
@@ -657,6 +668,7 @@ export function GetResources({
                 commandEmptyMessage={typesNoResultsText}
                 icon={<Shapes />}
                 badgesPlaceholder={anyType}
+                removeItemLabel={removeFilterItemText}
                 isDisabled={isLoadingResources}
               />
 
@@ -673,6 +685,7 @@ export function GetResources({
                 showScrollCue
                 icon={<Globe />}
                 badgesPlaceholder={anyLanguage}
+                removeItemLabel={removeFilterItemText}
                 isDisabled={isLoadingResources}
               />
             </div>
@@ -761,11 +774,18 @@ export function GetResources({
                         )}
                         {resource.installed && (
                           <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost">
-                                <Ellipsis className="tw:w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" aria-label={moreOptionsText}>
+                                      <Ellipsis className="tw:w-4" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                </TooltipTrigger>
+                                <TooltipContent>{moreOptionsText}</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
                             <DropdownMenuContent align="start">
                               <DropdownMenuItem onClick={() => onOpenResource(resource.projectId)}>
                                 <span>{openText}</span>

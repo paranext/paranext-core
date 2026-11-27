@@ -1,4 +1,14 @@
-import { Alert, AlertDescription, AlertTitle, Button, cn } from 'platform-bible-react';
+import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
+  Button,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+  cn,
+} from 'platform-bible-react';
 import { formatReplacementString } from 'platform-bible-utils';
 import type { LocalizedStringValue } from 'platform-bible-utils';
 import { Info, X } from 'lucide-react';
@@ -109,15 +119,22 @@ function RibbonShell({
         )}
       </AlertDescription>
       {dismissible && (
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label={dismissLabel}
-          onClick={onDismiss}
-          className="tw:absolute tw:end-1 tw:top-1 tw:h-7 tw:w-7"
-        >
-          <X className="tw:h-4 tw:w-4" />
-        </Button>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label={dismissLabel}
+                onClick={onDismiss}
+                className="tw:absolute tw:end-1 tw:top-1 tw:h-7 tw:w-7"
+              >
+                <X className="tw:h-4 tw:w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{dismissLabel}</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       )}
     </Alert>
   );

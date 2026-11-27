@@ -1167,6 +1167,11 @@ interface FilterProps extends MultiSelectComboBoxProps {
 	badgesPlaceholder: string;
 	/** Optional id for the component */
 	id?: string;
+	/**
+	 * Localized accessible name and tooltip of the ✕ button on each badge. `{item}` is replaced with
+	 * the label of the entry the button removes. Defaults to `Remove {item}`.
+	 */
+	removeItemLabel?: string;
 }
 /**
  * This is a variant of the {@link MultiSelectComboBox}, that shows a {@link Badge} component for each
@@ -1174,7 +1179,7 @@ interface FilterProps extends MultiSelectComboBoxProps {
  * selected options. A placeholder text must be provided through 'badgesPlaceholder'. This will be
  * displayed if no items are selected,
  */
-export declare function Filter({ entries, selected, onChange, placeholder, searchPlaceholder, commandEmptyMessage, customSelectedText, isDisabled, sortSelected, showScrollCue, icon, className, badgesPlaceholder, id, }: FilterProps): import("react/jsx-runtime").JSX.Element;
+export declare function Filter({ entries, selected, onChange, placeholder, searchPlaceholder, commandEmptyMessage, customSelectedText, isDisabled, sortSelected, showScrollCue, icon, className, badgesPlaceholder, id, removeItemLabel, }: FilterProps): import("react/jsx-runtime").JSX.Element;
 export type FootnoteLayout = "horizontal" | "vertical";
 /**
  * Where the caret should land within a footnote's text.
@@ -3298,6 +3303,17 @@ export type UndoRedoButtonsProps = {
  * make those shortcuts functional.
  */
 export declare function UndoRedoButtons({ onUndoClick, onRedoClick, canUndo, canRedo, localizedStrings, showKeyboardShortcuts, className, variant, }: UndoRedoButtonsProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * Object containing all keys used for localization in this component. If you're using this
+ * component in an extension, you can pass it into the useLocalizedStrings hook to easily obtain the
+ * localized strings and pass them into the localizedStrings prop of this component
+ */
+export declare const RESULTS_CARD_STRING_KEYS: readonly [
+	"%general_moreOptions%"
+];
+export type ResultsCardLocalizedStrings = {
+	[localizedKey in (typeof RESULTS_CARD_STRING_KEYS)[number]]?: LocalizedStringValue;
+};
 interface ResultsCardProps {
 	/** Unique key for the card */
 	cardKey: string;
@@ -3325,13 +3341,18 @@ interface ResultsCardProps {
 	additionalContent?: React$1.ReactNode;
 	/** Color to use for the card's accent border */
 	accentColor?: string;
+	/**
+	 * Localized strings for this component. Relevant keys can be found in `RESULTS_CARD_STRING_KEYS`;
+	 * each falls back to English when absent.
+	 */
+	localizedStrings?: ResultsCardLocalizedStrings;
 }
 /**
  * ResultsCard is a base component for displaying scripture-related results in a card format, even
  * though it is not based on the Card component. It provides common functionality like selection
  * state, dropdown menus, and expandable content.
  */
-export declare function ResultsCard({ cardKey, isSelected, onSelect, isDenied, isHidden, className, children, selectedButtons, hoverButtons, dropdownContent, additionalContent, accentColor, showDropdownOnHover, }: ResultsCardProps): import("react/jsx-runtime").JSX.Element;
+export declare function ResultsCard({ cardKey, isSelected, onSelect, isDenied, isHidden, className, children, selectedButtons, hoverButtons, dropdownContent, additionalContent, accentColor, showDropdownOnHover, localizedStrings, }: ResultsCardProps): import("react/jsx-runtime").JSX.Element;
 /** Props for {@link EmptyState}. */
 export type EmptyStateProps = {
 	/** Localized message explaining why the region is empty and, ideally, what the user can do next. */
@@ -3413,6 +3434,11 @@ export type SearchBarProps = {
 	isDisabled?: boolean;
 	/** Optional id for the root element */
 	id?: string;
+	/**
+	 * Localized accessible name and tooltip of the button that clears the search query. Defaults to
+	 * `Clear search`.
+	 */
+	clearButtonLabel?: string;
 };
 /**
  * A search bar component with a search icon and a clear button when the search query is not empty.
@@ -3428,6 +3454,8 @@ export type SearchBarProps = {
  *   search bar
  * @param {boolean} [props.isDisabled] - Optional boolean to disable the search bar
  * @param {string} [props.id] - Optional id for the root element
+ * @param {string} [props.clearButtonLabel] - Localized accessible name and tooltip of the clear
+ *   button
  */
 export declare const SearchBar: import("react").ForwardRefExoticComponent<SearchBarProps & import("react").RefAttributes<HTMLInputElement>>;
 export type SpinnerProps = LucideProps;
@@ -3642,6 +3670,11 @@ type DialogContentProps = React$1.ComponentProps<typeof DialogPrimitive.Content>
 	 */
 	overlayStyle?: React$1.CSSProperties;
 	showCloseButton?: boolean;
+	/**
+	 * Localized accessible name and tooltip of the close button shown when `showCloseButton` is
+	 * `true`. Defaults to `Close`.
+	 */
+	closeButtonLabel?: string;
 };
 /**
  * Main container for dialog content. Renders inside a portal with an overlay backdrop, centered on
@@ -3650,7 +3683,7 @@ type DialogContentProps = React$1.ComponentProps<typeof DialogPrimitive.Content>
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dialog}
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dialog}
  */
-export declare function DialogContent({ className, children, showCloseButton, overlayClassName, overlayStyle, style, ...props }: DialogContentProps): import("react/jsx-runtime").JSX.Element;
+export declare function DialogContent({ className, children, showCloseButton, overlayClassName, overlayStyle, style, closeButtonLabel, ...props }: DialogContentProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Container for the dialog's header area. Stacks title and description vertically.
  *
@@ -4140,7 +4173,10 @@ export declare function Sidebar({ variant, collapsible, className, children, ...
 	collapsible?: "offcanvas" | "icon" | "none";
 }): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc SidebarProvider */
-export declare function SidebarTrigger({ className, onClick, ...props }: React$1.ComponentProps<typeof Button>): import("react/jsx-runtime").JSX.Element;
+export declare function SidebarTrigger({ className, onClick, label, ...props }: React$1.ComponentProps<typeof Button> & {
+	/** Localized accessible name and tooltip of the trigger. Defaults to `Toggle Sidebar`. */
+	label?: string;
+}): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc SidebarProvider */
 export declare function SidebarRail({ className, ...props }: React$1.ComponentProps<"button">): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc SidebarProvider */

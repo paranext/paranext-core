@@ -16,6 +16,8 @@ import {
 export const SEMANTIC_DOMAIN_VIEWER_STRING_KEYS = Object.freeze([
   '%enhancedResources_semanticDomain_title%',
   '%enhancedResources_semanticDomain_description%',
+  '%enhancedResources_semanticDomain_expand%',
+  '%enhancedResources_semanticDomain_collapse%',
   ...DICTIONARY_DISPLAY_ITEM_STRING_KEYS,
   ...DICTIONARY_ENTRY_DETAIL_STRING_KEYS,
 ] as const);
@@ -104,6 +106,8 @@ export function SemanticDomainViewer({
   const descriptionLabel = String(
     getLocalizedString('%enhancedResources_semanticDomain_description%'),
   );
+  const expandLabel = String(getLocalizedString('%enhancedResources_semanticDomain_expand%'));
+  const collapseLabel = String(getLocalizedString('%enhancedResources_semanticDomain_collapse%'));
 
   // Default to the first root domain when the parent did not supply a path. The "Browse semantic
   // domains" cold entry uses this so the dialog opens at a sensible breadcrumb root rather than
@@ -130,6 +134,8 @@ export function SemanticDomainViewer({
           allDomains={allDomains}
           onDomainChange={onDomainChange}
           isLoading={isLoading}
+          expandLabel={expandLabel}
+          collapseLabel={collapseLabel}
           renderItem={(item) => (
             <DictionaryDisplayItem
               item={item}

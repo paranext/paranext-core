@@ -279,6 +279,38 @@ function ColumnHeaderWithTooltip({
   );
 }
 
+// ---------- Alert dismiss button ----------
+
+type AlertDismissButtonProps = {
+  label: string;
+  onClick: () => void;
+  testId: string;
+};
+
+/** Icon-only ✕ that dismisses one of the checklist's alerts, with its label as the tooltip. */
+function AlertDismissButton({ label, onClick, testId }: AlertDismissButtonProps) {
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="tw:h-6 tw:w-6 tw:shrink-0"
+            aria-label={label}
+            onClick={onClick}
+            data-testid={testId}
+          >
+            <X className="tw:h-4 tw:w-4" aria-hidden="true" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>{label}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
 // ---------- Component ----------
 
 /**
@@ -663,17 +695,11 @@ export function ChecklistTool({
               )}
             </AlertDescription>
           </div>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="tw:h-6 tw:w-6 tw:shrink-0"
-            aria-label={getLocalizedString('%markersChecklist_alert_dismiss%')}
+          <AlertDismissButton
+            label={getLocalizedString('%markersChecklist_alert_dismiss%')}
             onClick={handleDismissError}
-            data-testid="checklist-error-dismiss"
-          >
-            <X className="tw:h-4 tw:w-4" aria-hidden="true" />
-          </Button>
+            testId="checklist-error-dismiss"
+          />
         </Alert>
       );
     }
@@ -689,17 +715,11 @@ export function ChecklistTool({
           >
             {helpText}
           </AlertDescription>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="tw:h-6 tw:w-6 tw:shrink-0"
-            aria-label={getLocalizedString('%markersChecklist_alert_dismiss%')}
+          <AlertDismissButton
+            label={getLocalizedString('%markersChecklist_alert_dismiss%')}
             onClick={handleDismissHelpText}
-            data-testid="checklist-help-text-dismiss"
-          >
-            <X className="tw:h-4 tw:w-4" aria-hidden="true" />
-          </Button>
+            testId="checklist-help-text-dismiss"
+          />
         </Alert>
       );
     }

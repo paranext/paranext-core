@@ -49,6 +49,7 @@ export const PROJECT_PICKER_STRING_KEYS = Object.freeze([
   '%projectPicker_section_recent%',
   '%projectPicker_section_projects%',
   '%projectPicker_search_placeholder%',
+  '%general_clearSearch%',
   '%projectPicker_no_results%',
   '%projectPicker_current_project_label%',
   '%projectPicker_readOnly_label%',
@@ -277,6 +278,7 @@ export default function ProjectPicker({
           value={searchText}
           onSearch={setSearchText}
           placeholder={searchPlaceholder}
+          clearButtonLabel={localizeString(localizedStrings, '%general_clearSearch%')}
           isFullWidth
         />
       </div>

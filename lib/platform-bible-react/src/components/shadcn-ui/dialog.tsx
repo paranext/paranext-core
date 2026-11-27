@@ -8,6 +8,15 @@ import { Button } from '@/components/shadcn-ui/button';
 // CUSTOM: Import readDirection for RTL support
 import { readDirection } from '@/utils/dir-helper.util';
 import { IconX } from '@tabler/icons-react';
+// CUSTOM: Import Tooltip parts so the icon-only close button shows its label on hover and focus
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/shadcn-ui/tooltip';
+// CUSTOM: Import resolveLocalizedString so an unresolved closeButtonLabel falls back to English
+import { resolveLocalizedString } from '@/utils/localization.util';
 
 /**
  * The Dialog component displays a modal dialog window. Built on Radix UI's Dialog primitive and
@@ -101,6 +110,13 @@ export type DialogContentProps = React.ComponentProps<typeof DialogPrimitive.Con
    */
   overlayStyle?: React.CSSProperties;
   showCloseButton?: boolean;
+  // CUSTOM: Added closeButtonLabel so callers can localize the close button's accessible name and
+  // tooltip, which shadcn hard-codes as English "Close"
+  /**
+   * Localized accessible name and tooltip of the close button shown when `showCloseButton` is
+   * `true`. Defaults to `Close`.
+   */
+  closeButtonLabel?: string;
 };
 
 /**
@@ -120,10 +136,14 @@ function DialogContent({
   overlayStyle,
   // CUSTOM: Destructure style to allow merging with shared z-index constant
   style,
+  // CUSTOM: Destructure closeButtonLabel so it labels the close button instead of reaching the DOM
+  closeButtonLabel,
   ...props
 }: DialogContentProps) {
   // CUSTOM: Use readDirection for RTL support — sets dir on dialog content so text direction is correct
   const dir = readDirection();
+  // CUSTOM: Resolve the close button's label once; it is both the screen-reader text and the tooltip
+  const closeLabel = resolveLocalizedString(closeButtonLabel, 'Close');
   return (
     <DialogPortal>
       {/* CUSTOM: Pass overlayClassName and overlayStyle to DialogOverlay for per-call backdrop styling */}
@@ -142,13 +162,25 @@ function DialogContent({
         {...props}
       >
         {children}
+        {/* CUSTOM: Wrapped the icon-only close button in a Tooltip showing the same label as its
+            sr-only text, so sighted users can learn what the X does (every icon button needs a
+            tooltip; see Guidelines/Tooltips). It has its own TooltipProvider because a dialog can
+            open where no ancestor supplies one. The sr-only span stays, now with the localizable
+            label in place of the hard-coded English "Close". */}
         {showCloseButton && (
-          <DialogPrimitive.Close data-slot="dialog-close" asChild>
-            <Button variant="ghost" className="tw:absolute tw:top-2 tw:end-2" size="icon-sm">
-              <IconX />
-              <span className="tw:sr-only">Close</span>
-            </Button>
-          </DialogPrimitive.Close>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <DialogPrimitive.Close data-slot="dialog-close" asChild>
+                  <Button variant="ghost" className="tw:absolute tw:top-2 tw:end-2" size="icon-sm">
+                    <IconX />
+                    <span className="tw:sr-only">{closeLabel}</span>
+                  </Button>
+                </DialogPrimitive.Close>
+              </TooltipTrigger>
+              <TooltipContent>{closeLabel}</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         )}
       </DialogPrimitive.Content>
     </DialogPortal>

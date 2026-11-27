@@ -438,24 +438,30 @@ function PresenceFilterMenu({
   const isFilterActive = value !== 'all';
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="sm"
-          className={cn(
-            'tw:ml-auto tw:h-8 tw:w-8 tw:shrink-0 tw:p-0',
-            isFilterActive &&
-              'tw:bg-accent tw:text-accent-foreground tw:hover:bg-accent/80 tw:data-[state=open]:bg-accent',
-          )}
-          aria-label={ariaLabel}
-          aria-pressed={isFilterActive}
-          title={ariaLabel}
-          data-testid={`${testIdPrefix}-trigger`}
-          data-active={isFilterActive ? 'true' : 'false'}
-        >
-          <Filter className="tw:h-4 tw:w-4" />
-        </Button>
-      </DropdownMenuTrigger>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className={cn(
+                  'tw:ml-auto tw:h-8 tw:w-8 tw:shrink-0 tw:p-0',
+                  isFilterActive &&
+                    'tw:bg-accent tw:text-accent-foreground tw:hover:bg-accent/80 tw:data-[state=open]:bg-accent',
+                )}
+                aria-label={ariaLabel}
+                aria-pressed={isFilterActive}
+                data-testid={`${testIdPrefix}-trigger`}
+                data-active={isFilterActive ? 'true' : 'false'}
+              >
+                <Filter className="tw:h-4 tw:w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+          </TooltipTrigger>
+          <TooltipContent>{ariaLabel}</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
       <DropdownMenuContent align="end" className="tw:w-44" style={{ zIndex: Z_INDEX_OVERLAY }}>
         <DropdownMenuLabel>{menuLabel}</DropdownMenuLabel>
         <DropdownMenuRadioGroup
@@ -2481,6 +2487,7 @@ export function ManageBooksDialog({
                     value={filter}
                     onSearch={setFilter}
                     placeholder={t('%manageBooks_filter_placeholder%', 'Filter books…')}
+                    clearButtonLabel={t('%general_clearSearch%', 'Clear search')}
                     // SearchBar's inner shadcn Input defaults to tw:h-10, making
                     // the search component visibly taller than its siblings
                     // (BookGridGroupByToggle, PresenceFilterMenu — all tw:h-8).

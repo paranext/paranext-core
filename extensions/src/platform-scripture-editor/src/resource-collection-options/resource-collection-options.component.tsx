@@ -6,6 +6,10 @@ import {
   Label,
   ToggleGroup,
   ToggleGroupItem,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
 } from 'platform-bible-react';
 import { Lock, X } from 'lucide-react';
 import { ReactNode, useId } from 'react';
@@ -108,6 +112,10 @@ export function ResourceCollectionOptions({
     // Composed in JS (not a raw JSX text node) so the em-dash separator does not trip
     // no-hardcoded-jsx-strings.
     const fullLabel = longName ? `${name} — ${longName}` : name;
+    const removeLabel = formatReplacementString(
+      localize(localizedStrings, RESOURCE_COLLECTION_OPTIONS_KEYS.removeFromList),
+      { resourceName: name },
+    );
     return (
       <div key={id} className="tw:group tw:flex tw:min-w-0 tw:items-center tw:gap-2 tw:py-1">
         <Label className="tw:flex tw:min-w-0 tw:flex-1 tw:items-center tw:gap-2 tw:font-normal">
@@ -142,20 +150,26 @@ export function ResourceCollectionOptions({
           )}
         </Label>
         {row.isUserRemovable && (
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            disabled={disabled}
-            aria-label={formatReplacementString(
-              localize(localizedStrings, RESOURCE_COLLECTION_OPTIONS_KEYS.removeFromList),
-              { resourceName: name },
-            )}
-            aria-describedby={hasRemoveHint ? removeHintId : undefined}
-            className="tw:shrink-0 tw:opacity-0 tw:transition-opacity tw:group-hover:opacity-100 tw:focus-visible:opacity-100"
-            onClick={() => onRemoveFromList(id)}
-          >
-            <X className="tw:h-4 tw:w-4" />
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              {/* No DisabledTooltipWrapper: while `disabled`, `disabledMessage` already explains
+                  the whole panel, and a focusable wrapper would add a tab stop for a hidden ✕. */}
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  disabled={disabled}
+                  aria-label={removeLabel}
+                  aria-describedby={hasRemoveHint ? removeHintId : undefined}
+                  className="tw:shrink-0 tw:opacity-0 tw:transition-opacity tw:group-hover:opacity-100 tw:focus-visible:opacity-100"
+                  onClick={() => onRemoveFromList(id)}
+                >
+                  <X className="tw:h-4 tw:w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{removeLabel}</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         )}
         {/* Lock marks the team's rows (the top section), which can't be removed.
             Gated on isAdminLocked, NOT !isUserRemovable: downloaded rows in the bottom section

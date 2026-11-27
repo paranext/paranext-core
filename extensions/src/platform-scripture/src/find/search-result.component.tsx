@@ -5,6 +5,7 @@ import {
   DisabledActionTooltip,
   DropdownMenuItem,
   ResultsCard,
+  RESULTS_CARD_STRING_KEYS,
 } from 'platform-bible-react';
 import { LocalizedStringValue, LocalizeKey, UsjReaderWriter } from 'platform-bible-utils';
 import { FindResult } from 'platform-scripture';
@@ -39,6 +40,7 @@ const WORDS_AROUND_SEARCH_RESULT = 15;
 const HEADER_MAX_CHARACTERS = 1000;
 
 export const SEARCH_RESULT_LOCALIZED_STRING_KEYS: LocalizeKey[] = [
+  ...RESULTS_CARD_STRING_KEYS,
   '%general_cancel%',
   '%webView_find_copyReference%',
   '%webView_find_copyVerseText%',
@@ -649,6 +651,7 @@ export default function SearchResult({
         dropdownContent={searchResult.isReplaced ? undefined : dropdownContent}
         showDropdownOnHover={!searchResult.isReplaced}
         additionalContent={additionalSelectedContent}
+        localizedStrings={localizedStrings}
       >
         {cardContent}
       </ResultsCard>

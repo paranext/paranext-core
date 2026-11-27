@@ -66,6 +66,7 @@ import {
  */
 export const HOME_STRING_KEYS = Object.freeze([
   '%general_countOfTotal%',
+  '%general_moreOptions%',
   '%resources_action%',
   '%resources_activity%',
   '%resources_activity_tooltip%',
@@ -525,6 +526,7 @@ export function Home({
     : getLocalizedString('%resources_items%');
   const countOfTotalText: string = getLocalizedString('%general_countOfTotal%');
   const languageText: string = getLocalizedString('%resources_language%');
+  const moreOptionsText: string = getLocalizedString('%general_moreOptions%');
   const activityTooltipText: string = getLocalizedString('%resources_activity_tooltip%');
   const paratextProjectText: string = getLocalizedString('%resources_paratextProject_tooltip%');
   const paratextProjectReadOnlyText: string = getLocalizedString(
@@ -1259,6 +1261,7 @@ export function Home({
                   value={textFilter}
                   onSearch={setTextFilter}
                   placeholder={filterInputText}
+                  clearButtonLabel={clearSearchText}
                 />
               </div>
               <ProjectResourceFilter
@@ -1452,7 +1455,10 @@ export function Home({
                                    * over the inner item's, so a disabled Open would look and act
                                    * enabled.
                                    */}
-                                  <HomeItemDropdownMenu ellipsisButtonClassName="tw:h-6">
+                                  <HomeItemDropdownMenu
+                                    ellipsisButtonClassName="tw:h-6"
+                                    label={moreOptionsText}
+                                  >
                                     {project.isSendReceivable &&
                                       (!project.isLocallyAvailable || isEdited(project)) &&
                                       syncOrGetButton(project, true)}
@@ -1479,7 +1485,7 @@ export function Home({
                                   ? syncOrGetButton(project)
                                   : openButton(project)}
                                 {project.isSendReceivable && project.isLocallyAvailable && (
-                                  <HomeItemDropdownMenu>
+                                  <HomeItemDropdownMenu label={moreOptionsText}>
                                     {isEdited(project)
                                       ? openButton(project, true)
                                       : syncOrGetButton(project, true)}

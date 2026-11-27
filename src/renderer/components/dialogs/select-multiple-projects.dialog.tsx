@@ -13,9 +13,21 @@ import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-pro
 import { papiFrontendProjectDataProviderService } from '@shared/services/project-data-provider.service';
 import { projectLookupService } from '@shared/services/project-lookup.service';
 import { Check, FolderOpenIcon } from 'lucide-react';
-import { Button, usePromise } from 'platform-bible-react';
+import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
+import {
+  Button,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+  usePromise,
+} from 'platform-bible-react';
 import { LocalizeKey } from 'platform-bible-utils';
 import { useCallback, useMemo, useState } from 'react';
+
+const SUBMIT_KEY = '%general_button_submit%';
+/** Stable across renders, as `useLocalizedStrings` requires */
+const STRING_KEYS: LocalizeKey[] = [SUBMIT_KEY];
 
 function SelectMultipleProjectsDialog({
   prompt,
@@ -80,6 +92,9 @@ function SelectMultipleProjectsDialog({
     } else setSelectedProjectIds([...selectedProjectIds, toggledProjectId]);
   };
 
+  const [localizedStrings] = useLocalizedStrings(STRING_KEYS);
+  const submitLabel = localizedStrings[SUBMIT_KEY];
+
   return (
     <div className="select-multiple-projects-dialog">
       <div className="select-multiple-projects-dialog-scroll">
@@ -99,9 +114,16 @@ function SelectMultipleProjectsDialog({
         )}
       </div>
       <div className="select-multiple-projects-submit-button">
-        <Button onClick={() => submitDialog(selectedProjectIds)}>
-          <Check />
-        </Button>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button aria-label={submitLabel} onClick={() => submitDialog(selectedProjectIds)}>
+                <Check />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{submitLabel}</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </div>
     </div>
   );

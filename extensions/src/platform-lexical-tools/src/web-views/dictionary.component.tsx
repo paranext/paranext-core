@@ -397,6 +397,7 @@ export function Dictionary({
               value={searchQuery}
               onSearch={setSearchQuery}
               placeholder={localizedStrings['%platformLexicalTools_dictionary_searchDictionary%']}
+              clearButtonLabel={localizedStrings['%general_clearSearch%']}
               isFullWidth
             />
           </div>

@@ -269,7 +269,11 @@ export type {
   UndoRedoButtonsLocalizedStrings,
   UndoRedoButtonsProps,
 } from './components/basics/undo-redo-buttons.component';
-export { default as ResultsCard } from './components/basics/results-card.component';
+export {
+  default as ResultsCard,
+  RESULTS_CARD_STRING_KEYS,
+} from './components/basics/results-card.component';
+export type { ResultsCardLocalizedStrings } from './components/basics/results-card.component';
 export { EmptyState } from './components/basics/empty-state.component';
 export type { EmptyStateProps } from './components/basics/empty-state.component';
 export { RetryableErrorView } from './components/basics/retryable-error-view.component';
