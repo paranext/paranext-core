@@ -5,7 +5,11 @@ import {
   ABORTED,
   RESOURCE_EXHAUSTED,
   FAILED_PRECONDITION,
+  INVALID_ARGUMENT,
   LanguageStrings,
+  Localized,
+  MenuItemContainingCommand,
+  MultiColumnMenu,
 } from 'platform-bible-utils';
 import { sendCommand } from '@shared/services/command.service';
 import { localizationService } from '@shared/services/localization.service';
@@ -19,8 +23,9 @@ import {
   PopoverRequest,
 } from './overlay.service-model';
 import { getOverlays, getOverlayById, clearAllOverlays, subscribe } from './overlay-store';
-import { getWebViewIframe, isWebViewVisible } from './overlay-coordinates';
+import { getWebViewIframe, isWebViewVisible, translateCoordinates } from './overlay-coordinates';
 import { markOverlayFocusReturnIfFocusInside } from './overlay-focus-return.util';
+import { validateTabMenu } from './overlay-validation';
 import { WINDOW_BLUR_PRESS_MARKER } from './window-blur-press.util';
 
 /** Must match DEBOUNCE_COOLDOWN_MS in overlay.service-host.ts */
@@ -43,6 +48,7 @@ vi.mock('./overlay-validation', () => ({
   validateCommandPaletteRequest: vi.fn(),
   validateContextMenuItems: vi.fn(),
   validatePopoverRequest: vi.fn(),
+  validateTabMenu: vi.fn(),
 }));
 
 vi.mock('@shared/services/command.service', () => ({
@@ -145,6 +151,16 @@ const DEFAULT_WEB_VIEW_MENU = {
     ],
   },
 };
+
+/**
+ * Settles an overlay that answers with an id: a context menu's command, a popover's action or a
+ * command palette's item. A tab menu answers with a whole menu item instead.
+ */
+function resolveWithId(overlay: OverlayEntry | undefined, id: string): void {
+  if (!overlay || overlay.type === 'tabMenu')
+    throw new Error(`Expected an overlay that answers with an id, got ${overlay?.type}`);
+  overlay.resolve(id);
+}
 
 /** Assert that showPopover returned a defined overlay ID (non-debounced). Narrows the type. */
 function expectPopoverId(id: string | undefined): asserts id is string {
@@ -270,6 +286,206 @@ describe('overlay.service-host', () => {
       // Clean up
       getOverlays()[0].resolve(undefined);
       return promise1;
+    });
+  });
+
+  describe('tab menus', () => {
+    const COPY_ITEM: Localized<MenuItemContainingCommand> = {
+      label: 'Copy',
+      localizeNotes: '',
+      group: 'ext.editGroup',
+      order: 1,
+      command: 'ext.copy',
+    };
+    const TAB_MENU: Localized<MultiColumnMenu> = {
+      columns: { 'ext.edit': { label: 'Edit', order: 1 } },
+      groups: { 'ext.editGroup': { column: 'ext.edit', order: 1 } },
+      items: [COPY_ITEM],
+    };
+    const ANCHOR = { x: 4, y: 2, width: 32, height: 28 };
+
+    function getTabMenuOverlay() {
+      const overlay = getOverlays().find((o) => o.type === 'tabMenu');
+      if (overlay?.type !== 'tabMenu') throw new Error('No tab menu is open');
+      return overlay;
+    }
+
+    afterEach(() => {
+      vi.mocked(getWebViewIframe).mockReset();
+      vi.mocked(validateTabMenu).mockReset();
+    });
+
+    it('opens the menu below the trigger, translated into the window', async () => {
+      vi.mocked(translateCoordinates).mockReturnValueOnce({ x: 304, y: 82 });
+
+      const promise = overlayService.showTabMenu(TAB_MENU, 'tab-webview', { anchor: ANCHOR });
+
+      expect(translateCoordinates).toHaveBeenCalledWith('tab-webview', ANCHOR);
+      const overlay = getTabMenuOverlay();
+      expect(overlay.menu).toBe(TAB_MENU);
+      expect(overlay.anchor).toEqual({ x: 304, y: 82, width: 32, height: 28 });
+      expect(overlay.focusFirstItem).toBe(false);
+
+      overlay.resolve(undefined);
+      await expect(promise).resolves.toBeUndefined();
+    });
+
+    it('hands the picked item back without running its command', async () => {
+      vi.mocked(sendCommand).mockClear();
+      const promise = overlayService.showTabMenu(TAB_MENU, 'tab-webview', { anchor: ANCHOR });
+
+      getTabMenuOverlay().resolve(COPY_ITEM);
+
+      await expect(promise).resolves.toBe(COPY_ITEM);
+      expect(sendCommand).not.toHaveBeenCalled();
+    });
+
+    it('focuses the requesting web view before the pick reaches it, and not on a dismissal', async () => {
+      const iframe = document.createElement('iframe');
+      const focus = vi.spyOn(iframe, 'focus');
+      vi.mocked(getWebViewIframe).mockReturnValue(iframe);
+
+      const dismissed = overlayService.showTabMenu(TAB_MENU, 'tab-webview', { anchor: ANCHOR });
+      getTabMenuOverlay().resolve(undefined);
+      await dismissed;
+      expect(focus).not.toHaveBeenCalled();
+
+      resetDebounceState();
+      const picked = overlayService.showTabMenu(TAB_MENU, 'tab-webview', { anchor: ANCHOR });
+      getTabMenuOverlay().resolve(COPY_ITEM);
+      // Synchronously, before the web view's continuation can run its handler
+      expect(focus).toHaveBeenCalledTimes(1);
+      await picked;
+    });
+
+    it('hands the pick back even though focusing the web view blurs the window, after the creation grace', async () => {
+      vi.useFakeTimers();
+      await startOverlayService();
+      const iframe = document.createElement('iframe');
+      // Focusing a frame blurs the top window synchronously, which runs the blur auto-dismissal
+      vi.spyOn(iframe, 'focus').mockImplementation(() => {
+        window.dispatchEvent(new Event('blur'));
+      });
+      vi.mocked(getWebViewIframe).mockReturnValue(iframe);
+
+      const picked = overlayService.showTabMenu(TAB_MENU, 'tab-webview', { anchor: ANCHOR });
+      vi.advanceTimersByTime(350);
+      getTabMenuOverlay().resolve(COPY_ITEM);
+
+      await expect(picked).resolves.toBe(COPY_ITEM);
+      expect(getOverlays()).toHaveLength(0);
+    });
+
+    it('replaces an open tab menu from the same web view', async () => {
+      const first = overlayService.showTabMenu(TAB_MENU, 'tab-webview', { anchor: ANCHOR });
+      resetDebounceState();
+      const second = overlayService.showTabMenu(TAB_MENU, 'tab-webview', { anchor: ANCHOR });
+
+      await expect(first).rejects.toSatisfy(
+        (error: unknown) => isPlatformError(error) && error.code === ABORTED,
+      );
+      expect(getOverlays().filter((o) => o.type === 'tabMenu')).toHaveLength(1);
+
+      getTabMenuOverlay().resolve(undefined);
+      await second;
+    });
+
+    it('rejects an invalid menu or anchor without closing the menu already open', async () => {
+      const actualValidation =
+        await vi.importActual<typeof import('./overlay-validation')>('./overlay-validation');
+      vi.mocked(validateTabMenu).mockImplementation(actualValidation.validateTabMenu);
+      const open = overlayService.showTabMenu(TAB_MENU, 'tab-webview', { anchor: ANCHOR });
+      const openMenuId = getTabMenuOverlay().id;
+      vi.mocked(windowService.getFocus).mockClear();
+      const isInvalidArgument = (error: unknown) =>
+        isPlatformError(error) && error.code === INVALID_ARGUMENT;
+
+      resetDebounceState();
+      await expect(
+        overlayService.showTabMenu({ ...TAB_MENU, items: [] }, 'tab-webview', { anchor: ANCHOR }),
+      ).rejects.toSatisfy(isInvalidArgument);
+      resetDebounceState();
+      await expect(
+        overlayService.showTabMenu(TAB_MENU, 'tab-webview', {
+          anchor: { ...ANCHOR, x: Number.NaN },
+        }),
+      ).rejects.toSatisfy(isInvalidArgument);
+
+      expect(getOverlays().map((o) => o.id)).toEqual([openMenuId]);
+      // No focus record was started for the refused requests
+      expect(windowService.getFocus).not.toHaveBeenCalled();
+
+      getTabMenuOverlay().resolve(undefined);
+      await expect(open).resolves.toBeUndefined();
+    });
+
+    it('refuses a request from a web view that is not visible', async () => {
+      vi.mocked(isWebViewVisible).mockReturnValueOnce(false);
+
+      await expect(
+        overlayService.showTabMenu(TAB_MENU, 'hidden-webview', { anchor: ANCHOR }),
+      ).rejects.toSatisfy(
+        (error: unknown) => isPlatformError(error) && error.code === FAILED_PRECONDITION,
+      );
+      expect(getOverlays()).toHaveLength(0);
+    });
+
+    it('opens with its first item focused when the keyboard opened it', async () => {
+      const promise = overlayService.showTabMenu(TAB_MENU, 'tab-webview', {
+        anchor: ANCHOR,
+        focusFirstItem: true,
+      });
+
+      expect(getTabMenuOverlay().focusFirstItem).toBe(true);
+
+      getTabMenuOverlay().resolve(undefined);
+      await promise;
+    });
+
+    it('closes on Escape or a click anywhere in the app window, and when another tab takes focus', async () => {
+      vi.useFakeTimers();
+      appWindowInputSubscribers.length = 0;
+      resetAppWindowInputState();
+      vi.mocked(windowService.subscribeFocus).mockClear();
+      await startOverlayService();
+      const onFocusChange = vi.mocked(windowService.subscribeFocus).mock.calls.at(-1)?.[1];
+      const openPastGrace = () => {
+        resetDebounceState();
+        const promise = overlayService.showTabMenu(TAB_MENU, 'tab-webview', { anchor: ANCHOR });
+        // Past the creation grace period, inside which the auto-dismiss listeners stand down
+        vi.advanceTimersByTime(350);
+        return promise;
+      };
+
+      const closedByEscape = openPastGrace();
+      appWindowInputSubscribers.forEach((subscriber) => subscriber({ kind: 'escape' }));
+      await expect(closedByEscape).resolves.toBeUndefined();
+
+      const closedByClick = openPastGrace();
+      appWindowInputSubscribers.forEach((subscriber) => subscriber({ kind: 'mouseDown' }));
+      // Past the deferred mouse-down decision
+      vi.advanceTimersByTime(50);
+      await expect(closedByClick).resolves.toBeUndefined();
+
+      const closedByTabChange = openPastGrace();
+      onFocusChange?.({ focusType: 'tab', id: 'another-tab', tabType: 'test' });
+      await expect(closedByTabChange).resolves.toBeUndefined();
+      expect(getOverlays()).toHaveLength(0);
+    });
+
+    it('stays open while the menu itself scrolls, and closes when anything else scrolls', async () => {
+      await startOverlayService();
+      const promise = overlayService.showTabMenu(TAB_MENU, 'tab-webview', { anchor: ANCHOR });
+      const menuContent = document.createElement('div');
+      menuContent.setAttribute('data-overlay-tab-menu', '');
+      document.body.appendChild(menuContent);
+
+      menuContent.dispatchEvent(new Event('scroll'));
+      expect(getOverlays().filter((o) => o.type === 'tabMenu')).toHaveLength(1);
+
+      window.dispatchEvent(new Event('scroll'));
+      await expect(promise).resolves.toBeUndefined();
+      menuContent.remove();
     });
   });
 
@@ -2316,7 +2532,7 @@ describe('overlay.service-host', () => {
         const { dismissed } = await openContextMenuPastGrace();
         focusFrame();
 
-        getOverlays()[0].resolve('ext.cut');
+        resolveWithId(getOverlays()[0], 'ext.cut');
 
         await dismissed;
         expect(windowService.setFocus).toHaveBeenCalledWith({
@@ -2329,9 +2545,10 @@ describe('overlay.service-host', () => {
         const id = await openPopoverPastGrace();
         focusFrame();
 
-        getOverlays()
-          .find((o) => o.id === id)
-          ?.resolve('action');
+        resolveWithId(
+          getOverlays().find((o) => o.id === id),
+          'action',
+        );
 
         expect(windowService.setFocus).toHaveBeenCalledWith({
           focusType: 'webView',
@@ -2344,12 +2561,12 @@ describe('overlay.service-host', () => {
           ...paletteRequest,
           passive: true,
         });
-        getOverlays()[0].resolve('ft');
+        resolveWithId(getOverlays()[0], 'ft');
         await passivePicked;
         expect(windowService.setFocus).toHaveBeenCalledTimes(1);
 
         const { dismissed: activePicked } = await openPaletteBeyondGrace();
-        getOverlays()[0].resolve('xt');
+        resolveWithId(getOverlays()[0], 'xt');
         await activePicked;
         expect(windowService.setFocus).toHaveBeenCalledTimes(2);
       });
@@ -2378,7 +2595,7 @@ describe('overlay.service-host', () => {
         framedWebViewIds.add('pane-a');
         const { dismissed } = await openContextMenuPastGrace();
 
-        getOverlays()[0].resolve('ext.cut');
+        resolveWithId(getOverlays()[0], 'ext.cut');
 
         await dismissed;
         expect(windowService.setFocus).toHaveBeenCalledTimes(1);
@@ -2391,7 +2608,7 @@ describe('overlay.service-host', () => {
       it('returns focus to the requester when the overlay closes before the focus save answers', async () => {
         const picked = overlayService.showCommandPalette(paletteRequest, 'test-webview');
 
-        getOverlays()[0].resolve('ft');
+        resolveWithId(getOverlays()[0], 'ft');
 
         await picked;
         expect(windowService.setFocus).toHaveBeenCalledWith({
@@ -2761,7 +2978,7 @@ describe('overlay.service-host', () => {
         framedWebViewIds.clear();
         const { dismissed } = await openContextMenuPastGrace();
 
-        getOverlays()[0].resolve('ext.cut');
+        resolveWithId(getOverlays()[0], 'ext.cut');
 
         await dismissed;
         expect(windowService.setFocus).toHaveBeenCalledWith({ focusType: 'tab', id: 'tab-9' });
@@ -2772,7 +2989,7 @@ describe('overlay.service-host', () => {
         framedWebViewIds.clear();
         const { dismissed } = await openContextMenuPastGrace();
 
-        getOverlays()[0].resolve('ext.cut');
+        resolveWithId(getOverlays()[0], 'ext.cut');
 
         await dismissed;
         expect(windowService.setFocus).not.toHaveBeenCalled();
@@ -2786,7 +3003,7 @@ describe('overlay.service-host', () => {
         framedWebViewIds.clear();
         const { dismissed } = await openContextMenuPastGrace();
 
-        getOverlays()[0].resolve('ext.cut');
+        resolveWithId(getOverlays()[0], 'ext.cut');
 
         await dismissed;
         expect(windowService.setFocus).not.toHaveBeenCalled();

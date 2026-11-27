@@ -747,6 +747,9 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
   // around an \fp span's rendered line break — all in the scripture-editors repo's
   // ArrowNavigationPlugin) is deliberately NOT cataloged: arrow keys moving the caret in a
   // natural way is expected editor behavior, not a keyboard shortcut.
+  // Likewise the tab menu trigger's ArrowDown (`TabDropdownMenu` in platform-bible-react, both its
+  // in-document and its `openMenuInOverlay` form): it is the standard menu-button key, matching
+  // every other Radix dropdown trigger, not a shortcut.
   {
     id: 'scripture-text-grid-open-chapter-context',
     purpose: "Open or close the chapter-context view from the focused row's name control",

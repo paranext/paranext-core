@@ -88,6 +88,7 @@ import {
   useMarkerPaletteFocusOutCapture,
   useMarkerPaletteSessionWriters,
   type FootnoteEditorMarkerPalette,
+  type OpenTabMenuInOverlay,
 } from 'platform-bible-react/experimental';
 import {
   ABORTED,
@@ -5597,6 +5598,11 @@ function PlatformScriptureEditor({
     [getMenuFindSelectionText, runEditMenuCommand, webViewId],
   );
 
+  const openMenuInOverlay = useCallback<OpenTabMenuInOverlay>(
+    (menu, menuOptions) => papi.overlays.showTabMenu(menu, webViewId, menuOptions),
+    [webViewId],
+  );
+
   function renderEditor() {
     /* Workaround to pull in platform-bible-react styles into the editor */
     const workaround = <Button className="tw:hidden" />;
@@ -5888,6 +5894,7 @@ function PlatformScriptureEditor({
         onSelectProjectMenuItem={menuCommandHandler}
         onSelectViewInfoMenuItem={menuCommandHandler}
         projectMenuData={projectMenuData}
+        openMenuInOverlay={openMenuInOverlay}
         className={[
           'scripture-editor-tab-nav tw:z-10',
           ...(isPowerMode ? [] : ['scripture-editor-tab-nav-simple']),

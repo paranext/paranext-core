@@ -14,6 +14,8 @@ export type {
   PopoverAction,
   PopoverContent,
   PopoverRequest,
+  TabMenuOverlayOptions,
+  TabMenuTriggerRect,
 } from '@renderer/services/overlays/overlay.service-model';
 export type { IBaseProjectDataProviderEngine } from '@shared/models/base-project-data-provider-engine.model';
 export type {

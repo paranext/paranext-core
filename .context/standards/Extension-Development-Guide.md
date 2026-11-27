@@ -1,10 +1,10 @@
 ---
 title: Extension Development Guide
 description: Extension anatomy, lifecycle, PAPI usage, WebViews, and contribution points for Platform.Bible.
-version: 1.2.0
+version: 1.2.1
 status: active
 created: 2026-03-04
-last_updated: 2026-11-17
+last_updated: 2026-11-19
 ---
 
 # Extension Development Guide
@@ -455,6 +455,25 @@ the WebView. Both use the same formatter, so the title keeps its shape when the 
 and both show the project id when the name can't be read. See
 `adr-project-titles-from-one-formatter` in [Architecture-Decisions.md](Architecture-Decisions.md).
 
+### Tab Toolbar Menus (experimental)
+
+A web view with a `TabToolbar` or `TabFloatingMenu` passes `openMenuInOverlay`, so its menus open
+over the whole window instead of inside the web view's frame, where a narrow tab cuts them off:
+
+```tsx
+<TabToolbar
+  projectMenuData={projectMenuData}
+  onSelectProjectMenuItem={handleMenuItem}
+  onSelectViewInfoMenuItem={handleMenuItem}
+  openMenuInOverlay={(menu, options) =>
+    papi.overlays.showTabMenu(menu, globalThis.webViewId, options)
+  }
+/>
+```
+
+The picked item still comes back to the web view's own handler, with focus back in the frame. See
+`papi.overlays.showTabMenu` and `adr-tab-menus-open-in-the-overlay`.
+
 ### Content Zoom (experimental)
 
 A WebView opts into per-pane **content zoom** by marking the elements that render **project text** — scripture, note bodies, result snippets, resource text in its own font — and not the region around them. Buttons, inputs, filters, headers, badges and card frames stay outside every marked element, so they keep interface scale while the text grows:
@@ -668,3 +687,4 @@ For details, see [Merging Template Changes wiki](https://github.com/paranext/par
 | 1.1.10  | 2026-11-16 | Add "Per-Project Tab Titles" under WebViews: build them with `getLocalizedProjectTitle` and `useLocalizedProjectTitle`. |
 | 1.1.11  | 2026-11-17 | `'panel'` layouts: `'before-tab'` and `'after-tab'` open in the target's own tab group. |
 | 1.2.0   | 2026-11-17 | Add "Restricting who may call a command": `allowedCallers` on command registration, and what it does not protect against. |
+| 1.2.1   | 2026-11-19 | Add "Tab Toolbar Menus" under WebViews: a web view's tab toolbar passes `openMenuInOverlay` so its menus open over the whole window. |

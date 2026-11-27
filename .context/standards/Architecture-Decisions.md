@@ -6684,7 +6684,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     whether a menu may change under the pointer while it is open, and with it whether the authoring
     rule below stands. TODO(PT-5037): settle or change D3 per that review, then drop this note.
     Every surface updates while open: toolbar, web view top menus, self-rendered menus, tab menus
-    and overlay context menus. On the macOS menubar, enabled/checked update in place on the
+    and overlay context menus. The exception is a tab menu opened in the overlay with
+    `openMenuInOverlay`, which shows the menu as it was when it opened
+    (`adr-tab-menus-open-in-the-overlay`). On the macOS menubar, enabled/checked update in place on the
     existing native items; a visibility or structure change rebuilds the menubar, because
     evaluation removes hidden items and prunes emptied containers. Behaviour while a native menu is
     open is unverified on a real Mac as of 2026-11-02. `enabledWhen` became allowed on tab-menu and
@@ -12098,6 +12100,57 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** PT-4282; design and plan in the PRD folder
   (`2026-08-25-pt-4282-tab-move-menu-design.md`), Paratext 9 `ParatextFloatWindow.SetText`
   and `MainForm`'s Window menu.
+
+## adr-tab-menus-open-in-the-overlay: Web view tab toolbar menus open in the overlay and hand the pick back
+
+- **Date:** 2026-11-18
+- **Status:** Accepted
+- **Context:** A tab toolbar rendered inside a web view's iframe (the scripture editor, the
+  markers checklist, hello-rock3) opens its menus inside that iframe, so a narrow tab cuts the
+  menu off at the frame's edge and its submenus open outside the frame where nobody can see them.
+  The overlay service already draws context menus in the renderer's top document, but only from
+  `contextMenu` contributions, through a converter that drops column headings, column order and
+  icons, and it runs the picked command itself.
+- **Decision:** `papi.overlays.showTabMenu(menu, webViewId, options)` draws the tab menu the web
+  view passes, below its trigger's rectangle, and settles with the picked item instead of running
+  it. Both the in-frame menu and the overlay render the same `TabDropdownMenuItems` from
+  `platform-bible-react` (the overlay through `AnchoredTabMenu`), so headings, column order,
+  icons, shortcuts and tooltips cannot drift between the two. `TabToolbar` and `TabFloatingMenu`
+  opt in with an `openMenuInOverlay` prop; without it the menu still opens in the frame, which is
+  right for the renderer's own tab toolbar (already in the top document) and for extensions that
+  have not opted in. On a pick the service focuses the requesting iframe synchronously before
+  settling, because the web view's handler runs on settlement and its clipboard actions need the
+  frame focused and the click's user activation.
+- **Alternatives:** Keep the menu in the frame, shrink it to the tab and slide submenus back over
+  the parent when neither side has room — prototyped first and dropped in favour of this, because
+  a menu in a narrow tab is cramped whatever it does. Reuse `showContextMenu` with the `topMenu` —
+  rejected; it loses the headings and column order and runs the command in the renderer, which
+  breaks handlers that act inside the web view (the editor's Cut/Copy/Paste, the checklist's
+  Copy). Render the overlay's menu with its own copy of the tab menu layout — rejected; two
+  layouts drift.
+- **Consequences:**
+  - The pick reaches the web view's handler a microtask after the click, in another document.
+    Focusing the iframe blurs the top window synchronously, and the blur dismissal would settle the
+    same menu again, so `showTabMenu` counts only the first settle. As of 2026-11-18, a review probe
+    in the Electron app found the frame focused and its user activation active after the pick, and
+    `execCommand('copy')` and `navigator.clipboard.writeText` succeeded. As of 2026-11-19, Paste
+    from the scripture editor's Edit submenu was confirmed working in the Electron app by hand.
+  - The overlay shows the menu as it was when it opened: an `enabledWhen` or `checkedWhen` change
+    while it is open appears the next time it opens, unlike the in-frame menu (an exception to
+    `adr-menus-gate-declaratively-with-context-keys` D3). Handlers keep their own guards.
+  - Menu data supplied by a web view now renders in the top document, outside the web view's own
+    error boundary. `validateTabMenu` refuses the shapes known to throw while rendering (missing
+    columns or groups, items without a group, submenu cycles, a malformed anchor), and the overlay
+    wraps the menu in an error boundary that settles it as closed without a pick.
+  - A key pressed in the web view's frame never reaches the top document, so Radix there cannot
+    tell the menu was opened from the keyboard: the trigger says so itself (`focusFirstItem`) and
+    the overlay focuses the first item. For the same reason the trigger cannot tell an Escape from a
+    click away, so it hides its focus ring only after a pick.
+  - A web view whose tab is not visible cannot open its menu (the service refuses, as for context
+    menus). The menu is dismissed by the overlay service's rules (click away anywhere, Escape, tab
+    change, window blur), and scrolling inside it does not dismiss it.
+- **Source:** PR #3032; overlay service in `src/renderer/services/overlays/overlay.service-host.ts`
+  (`showTabMenu`) and `AnchoredTabMenu` in `platform-bible-react`'s `tab-dropdown-menu.component.tsx`.
 
 ## adr-tab-order-anchor-insert-before: Column 3 tab order is expressed as anchor + insert-before in the layout supplement, not as a pinning mechanism
 
