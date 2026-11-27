@@ -77,3 +77,18 @@ Make sure to
 - Add `role="status"` yourself when using `Empty` for a region whose content just changed, and keep that element mounted across the change so it is announced
 - Pass a border width (`tw:border`) when you want `Empty`'s dashed outline - the component sets the dashed style only
 - Nest your own heading element inside `EmptyTitle` when the zero state is a region's entire content, since `EmptyTitle` renders a `<div>`
+
+## Wizards
+
+For a task the user completes in a fixed sequence of steps — first-time setup, creating something that needs several decisions, an import with options — use
+
+- [Wizard](https://paranext.github.io/paranext-core/platform-bible-react-storybook/?path=/docs/basics-wizard--docs) - takes the steps (title, content, and whether the user may move on) and provides the step indicator, the [WizardStepper](https://paranext.github.io/paranext-core/platform-bible-react-storybook/?path=/docs/basics-wizardstepper--docs), and Back / Next / Finish (and optional Cancel) buttons
+
+Use a wizard only when the steps depend on each other or must happen in order. When the user can fill things in in any order, use a single form, or Tabs for groups of settings.
+
+Make sure to
+
+- **Keep the wizard's height constant across steps.** Moving to another step must not make the wizard grow or shrink: the Back and Next buttons stay exactly where they were, so the user can click Next repeatedly without chasing the button, and the surrounding layout does not jump. `Wizard` does this for you by sizing itself to its largest step; if you build a stepped flow without it, reserve the height of the largest step yourself
+- Keep steps short and roughly balanced in size, since the smaller steps are shown in the space the largest one needs
+- Gate Next on the step's own validation (`canAdvance`) instead of showing an error after the click
+- Keep each step's content in the step - do not add or remove content outside the wizard when the step changes

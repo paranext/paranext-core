@@ -876,5 +876,9 @@
   "%webView_projectAssignmentsAndProgress%": "Asignaciones y progreso",
   "%webView_title_type_formatString%": "{type} {defaultTitle}",
   "%window_label_empty%": "Ventana vacía",
+  "%wizard_button_back%": "Atrás",
+  "%wizard_button_finish%": "Finalizar",
+  "%wizard_button_next%": "Siguiente",
+  "%wizard_stepIndicator%": "Paso {stepNumber} de {stepCount}",
   "%wordList%": "Lista de palabras"
 }
