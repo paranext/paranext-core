@@ -322,7 +322,7 @@ describe('CommentItem editing an empty-bodied comment', () => {
       />,
     );
 
-    const trigger = container.querySelector<HTMLElement>('[data-slot="dropdown-menu-trigger"]');
+    const trigger = container.querySelector<HTMLElement>('[aria-haspopup="menu"]');
     if (!trigger) throw new Error('dropdown trigger not rendered');
     await user.click(trigger);
     await user.click(await screen.findByText('Edit Comment'));
@@ -477,7 +477,7 @@ describe('CommentItem destructive-action icons', () => {
     const cancelIcon = lucideIconName(cancelTrigger?.querySelector('svg'));
     expect(cancelIcon).toBeTruthy();
 
-    const menuTrigger = container.querySelector<HTMLElement>('[data-slot="dropdown-menu-trigger"]');
+    const menuTrigger = container.querySelector<HTMLElement>('[aria-haspopup="menu"]');
     if (!menuTrigger) throw new Error('dropdown trigger not rendered');
     await user.click(menuTrigger);
     const deleteMenuItem = await screen.findByText('Delete Comment');

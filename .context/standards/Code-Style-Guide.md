@@ -270,6 +270,16 @@ Before creating a new component:
 - Use semantic color variables (e.g., `tw:bg-card`) instead of hardcoded colors.
 - Add `pr-twp` at the top level of components to apply scoped Tailwind Preflight.
 
+### Icon Buttons Need a Tooltip
+
+Every icon-only button gets a `Tooltip` — wrap it in `<TooltipTrigger asChild>` and keep its
+`aria-label`, using the same localized string for both. An `aria-label` or `title` attribute alone is
+not enough. The ESLint rule `paranext/icon-button-requires-tooltip`
+(`lib/eslint-plugin-paranext/src/rules/icon-button-requires-tooltip.ts`, which lists what it cannot
+detect) enforces this; the pattern and its variants (menu triggers, disabled buttons) are in the
+Storybook page `Guidelines/Tooltips`
+(`lib/platform-bible-react/src/stories/guidelines/tooltips.mdx`).
+
 ### RTL/LTR Support
 
 Components must support both text directions:

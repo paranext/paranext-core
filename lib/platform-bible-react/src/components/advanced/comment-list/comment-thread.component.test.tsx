@@ -455,7 +455,7 @@ async function startEditingFirstComment(
   user: ReturnType<typeof userEvent.setup>,
 ) {
   const trigger = await waitFor(() => {
-    const el = container.querySelector<HTMLElement>('[data-slot="dropdown-menu-trigger"]');
+    const el = container.querySelector<HTMLElement>('[aria-haspopup="menu"]');
     if (!el) throw new Error('dropdown trigger not rendered yet');
     return el;
   });
@@ -607,9 +607,7 @@ describe('CommentThread comment-edit drafts', () => {
     // could in fact appear here — the thing the target assertion needs to be a meaningful negative of.
     const control = renderThread(commonProps);
     await control.findByRole('button', { name: 'Resolve thread' });
-    expect(control.container.querySelectorAll('[data-slot="dropdown-menu-trigger"]').length).toBe(
-      2,
-    );
+    expect(control.container.querySelectorAll('[aria-haspopup="menu"]').length).toBe(2);
     control.unmount();
 
     // Target: a persisted edit for the root comment, with nothing edited this mount (no click, no
@@ -620,7 +618,7 @@ describe('CommentThread comment-edit drafts', () => {
       draft: { commentEdits: { [baseComment.id]: NON_EMPTY_EDITOR_STATE } },
     });
     await target.findByRole('button', { name: 'Resolve thread' });
-    expect(target.container.querySelectorAll('[data-slot="dropdown-menu-trigger"]').length).toBe(0);
+    expect(target.container.querySelectorAll('[aria-haspopup="menu"]').length).toBe(0);
   });
 
   it('gates normally with no draft props at all: starting one edit blocks another, uncontrolled', async () => {
@@ -633,14 +631,14 @@ describe('CommentThread comment-edit drafts', () => {
       canUserResolveThreadCallback: async () => true,
     });
     await screen.findByRole('button', { name: 'Resolve thread' });
-    expect(container.querySelectorAll('[data-slot="dropdown-menu-trigger"]').length).toBe(2);
+    expect(container.querySelectorAll('[aria-haspopup="menu"]').length).toBe(2);
 
     await startEditingFirstComment(container, user);
 
     // Starting the root's edit live (this mount, via a click) must still block the reply's
     // affordance, the same as the persisted-draft/remount case above — exercised separately so the
     // two paths can't silently diverge.
-    expect(container.querySelectorAll('[data-slot="dropdown-menu-trigger"]').length).toBe(0);
+    expect(container.querySelectorAll('[aria-haspopup="menu"]').length).toBe(0);
   });
 });
 
@@ -663,7 +661,7 @@ describe('CommentThread stranded comment-edit drafts', () => {
 
     // The stranded entry must not gate the one still-active (and still reachable) comment's own
     // edit affordance.
-    expect(target.container.querySelectorAll('[data-slot="dropdown-menu-trigger"]').length).toBe(1);
+    expect(target.container.querySelectorAll('[aria-haspopup="menu"]').length).toBe(1);
   });
 
   it('an edit for a reply outside the visible last-two tail remains reachable after a remount', async () => {
@@ -883,6 +881,28 @@ describe('CommentThread icon-button tooltips', () => {
     expect(await screen.findByRole('tooltip')).toHaveTextContent('Cancel edit');
   });
 
+  it('shows a hover tooltip for the mark-as-read button in the thread header', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    renderThread({});
+
+    const markReadButton = screen.getByRole('button', { name: /^Mark as (un)?read$/ });
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+    await user.hover(markReadButton);
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(
+      markReadButton.getAttribute('aria-label') ?? '',
+    );
+  });
+
+  it('shows a hover tooltip for the comment actions menu button', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    renderThread({ canUserEditOrDeleteCommentCallback: async () => true });
+
+    const [moreActionsButton] = await screen.findAllByRole('button', { name: 'More actions' });
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+    await user.hover(moreActionsButton);
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('More actions');
+  });
+
   it('does not render a raw localize key in the assign-user tooltip before the key resolves', async () => {
     const user = userEvent.setup({ pointerEventsCheck: 0 });
     // Enabling the button (rather than relying on its aria-label, which uses the exact same
@@ -899,8 +919,9 @@ describe('CommentThread icon-button tooltips', () => {
       },
     });
 
-    const getAssignTrigger = () =>
-      container.querySelector<HTMLElement>('[data-slot="tooltip-trigger"]');
+    // The assign button is the thread's only popover trigger (Radix marks it `aria-haspopup="dialog"`);
+    // the header's icon buttons are tooltip triggers too, so that slot alone doesn't single it out.
+    const getAssignTrigger = () => container.querySelector<HTMLElement>('[aria-haspopup="dialog"]');
     await waitFor(() => {
       expect(getAssignTrigger()).not.toBeDisabled();
     });
