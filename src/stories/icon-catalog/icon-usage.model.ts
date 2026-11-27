@@ -58,6 +58,12 @@ export type IconConflictSeverity = 'fix' | 'review' | 'acceptable';
 /** The curated assessment of one detected conflict */
 export type IconConflictNote = {
   severity: IconConflictSeverity;
+  /**
+   * The UX lead has decided how this conflict is resolved, and `recommendation` states the decision
+   * (it starts with "Decided:"). A decided conflict is never left at `review`: it is `fix` while
+   * the code still has to change, or `acceptable` when the decision keeps the current state.
+   */
+  decided?: true;
   recommendation: string;
 };
 

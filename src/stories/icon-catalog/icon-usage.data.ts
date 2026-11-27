@@ -2879,8 +2879,9 @@ export const ICON_CONFLICT_NOTES: Record<string, IconConflictNote> = {
   // ---- One meaning, several icons ----
   'concept:bible-texts-panel': {
     severity: 'fix',
+    decided: true,
     recommendation:
-      'The menu item shows Book while the panel tab it opens shows BookOpen. Use BookOpen in both, so the menu item matches the tab it opens.',
+      'Decided: use BookOpen, the resource icon, for the Bible texts panel. The menu item shows Book today while the panel tab it opens shows BookOpen; move the menu item to BookOpen.',
   },
   'concept:cancel': {
     severity: 'acceptable',
@@ -2889,13 +2890,15 @@ export const ICON_CONFLICT_NOTES: Record<string, IconConflictNote> = {
   },
   'concept:checks': {
     severity: 'fix',
+    decided: true,
     recommendation:
-      'The menu item shows CircleCheckBig while the Checks tab it opens shows ClipboardCheck. Pick one (ClipboardCheck reads as "checklist") and use it in both.',
+      'Decided: use CircleCheck (the round circle check) for Checks. The menu item shows CircleCheckBig and the Checks tab shows ClipboardCheck today; move both to CircleCheck.',
   },
   'concept:close': {
-    severity: 'review',
+    severity: 'fix',
+    decided: true,
     recommendation:
-      'Every close/dismiss/clear control uses lucide X except the shadcn dialog, which uses tabler IconX. They look nearly identical; standardize on one library for close buttons.',
+      'Decided: no Tabler icons. Every close/dismiss/clear control uses lucide X except the shadcn dialog, which uses tabler IconX; replace it with lucide X.',
   },
   'concept:collapsed': {
     severity: 'fix',
@@ -2904,8 +2907,9 @@ export const ICON_CONFLICT_NOTES: Record<string, IconConflictNote> = {
   },
   'concept:commentaries-panel': {
     severity: 'fix',
+    decided: true,
     recommendation:
-      'The menu item shows BookMarked while the panel tab shows FileText, which is also the "show footnotes" icon. Use BookMarked for both.',
+      'Decided: use BookMarked for the commentaries panel, in the menu item and the panel tab. The tab shows FileText today, which is also the "show footnotes" icon; stop using FileText for commentaries.',
   },
   'concept:copy-to-clipboard': {
     severity: 'review',
@@ -2914,13 +2918,15 @@ export const ICON_CONFLICT_NOTES: Record<string, IconConflictNote> = {
   },
   'concept:edit': {
     severity: 'fix',
+    decided: true,
     recommendation:
-      'Edit actions use Pencil; the registration "Change" button uses Pen. Use Pencil.',
+      'Decided: use Pen for edit. Edit actions use Pencil today and the registration "Change" button uses Pen; replace Pencil with Pen.',
   },
   'concept:error': {
     severity: 'fix',
+    decided: true,
     recommendation:
-      'Errors use CircleAlert (alerts), TriangleAlert (banners, the checklist, the default retryable error) and tabler IconAlertOctagon (toasts). Use CircleAlert for errors and keep TriangleAlert for warnings, so the two can be told apart by shape.',
+      'Decided: CircleAlert for errors, TriangleAlert for warnings, so the two can be told apart by shape. Errors use CircleAlert (alerts), TriangleAlert (banners, the checklist, the default retryable error) and tabler IconAlertOctagon (toasts) today; move the TriangleAlert and IconAlertOctagon errors to CircleAlert.',
   },
   'concept:expanded': {
     severity: 'fix',
@@ -2933,9 +2939,10 @@ export const ICON_CONFLICT_NOTES: Record<string, IconConflictNote> = {
       'Filters use Funnel (imported as Filter), but the Find filters toggle uses SlidersHorizontal. Use Funnel unless the Find panel deliberately means "options" rather than "filter".',
   },
   'concept:get-resources': {
-    severity: 'review',
+    severity: 'fix',
+    decided: true,
     recommendation:
-      'The "Get resources" menu item shows Download; the Get Resources dialog header shows BookOpen (the generic resource icon). Use Download in the header too, or keep BookOpen only for resource rows.',
+      'Decided: use Download for Get Resources. The "Get resources" menu item shows Download; the Get Resources dialog header shows BookOpen (the generic resource icon) today; move the header to Download and keep BookOpen for resource rows.',
   },
   'concept:help': {
     severity: 'review',
@@ -2944,23 +2951,27 @@ export const ICON_CONFLICT_NOTES: Record<string, IconConflictNote> = {
   },
   'concept:import-books': {
     severity: 'fix',
+    decided: true,
     recommendation:
-      'Manage books shows FolderInput for "Import" in the sidebar but Download on the Import apply button. Use FolderInput in both.',
+      'Decided: always use the lucide Import icon for import. Manage books shows FolderInput for "Import" in the sidebar and Download on the Import apply button today; replace both with Import.',
   },
   'concept:info-notice': {
-    severity: 'review',
+    severity: 'fix',
+    decided: true,
     recommendation:
-      'Info notices use lucide Info; toasts use tabler IconInfoCircle. Standardize the toast icons on lucide (Info, CircleCheck, TriangleAlert, CircleAlert, LoaderCircle) to match the rest of the app.',
+      'Decided: no Tabler icons. Info notices use lucide Info; toasts use tabler IconInfoCircle. Replace the toast icons with their lucide equivalents (Info, CircleCheck, TriangleAlert, CircleAlert, LoaderCircle).',
   },
   'concept:language': {
-    severity: 'review',
+    severity: 'fix',
+    decided: true,
     recommendation:
-      'The resource language filter uses Globe and the interface language picker uses Languages. Use Languages for both.',
+      'Decided: use Languages for language. The resource language filter uses Globe and the interface language picker uses Languages; move the filter to Languages.',
   },
   'concept:loading': {
-    severity: 'review',
+    severity: 'fix',
+    decided: true,
     recommendation:
-      'Loading uses lucide LoaderCircle (via Spinner) everywhere except toasts, which use tabler IconLoader. See "Informational notice".',
+      'Decided: no Tabler icons. Loading uses lucide LoaderCircle (via Spinner) everywhere except toasts, which use tabler IconLoader; replace it with LoaderCircle.',
   },
   'concept:more-actions': {
     severity: 'review',
@@ -2974,18 +2985,21 @@ export const ICON_CONFLICT_NOTES: Record<string, IconConflictNote> = {
   },
   'concept:navigate-back': {
     severity: 'fix',
+    decided: true,
     recommendation:
-      'Back buttons use ArrowLeft, except the enhanced resources dictionary list, which uses ArrowUp. Use ArrowLeft (mirrored in right-to-left).',
+      'Decided: use ArrowLeft for back (mirrored in right-to-left). Back buttons use ArrowLeft except the enhanced resources dictionary list, which uses ArrowUp; move it to ArrowLeft.',
   },
   'concept:open-dropdown': {
-    severity: 'review',
+    severity: 'fix',
+    decided: true,
     recommendation:
-      'Dropdown triggers use ChevronDown (single choice), ChevronsUpDown (multi choice, dock tab overflow) and tabler IconSelector (shadcn Select, Book Chapter Control). IconSelector and ChevronsUpDown are the same shape from two libraries; use ChevronsUpDown for selects and ChevronDown for menus and popovers.',
+      'Decided: no Tabler icons. Dropdown triggers use ChevronDown (single choice), ChevronsUpDown (multi choice, dock tab overflow) and tabler IconSelector (shadcn Select, Book Chapter Control); replace IconSelector with lucide ChevronsUpDown, the same shape. Keep ChevronsUpDown for selects and ChevronDown for menus and popovers.',
   },
   'concept:opens-externally': {
     severity: 'fix',
+    decided: true,
     recommendation:
-      'Links that leave the app use ExternalLink, except the extension website link, which uses Link. Use ExternalLink.',
+      'Decided: use ExternalLink for anything that opens outside the app. The extension website link uses Link; move it to ExternalLink.',
   },
   'concept:project': {
     severity: 'review',
@@ -2994,41 +3008,49 @@ export const ICON_CONFLICT_NOTES: Record<string, IconConflictNote> = {
   },
   'concept:redo': {
     severity: 'fix',
+    decided: true,
     recommendation:
-      'The editor menu uses Redo2 while the shared UndoRedoButtons component uses Redo. Use one pair everywhere (Undo2/Redo2, which the menus already use).',
+      'Decided: use Undo2 / Redo2 everywhere. The editor menu uses Redo2 while the shared UndoRedoButtons component uses Redo; move UndoRedoButtons to Redo2.',
   },
   'concept:search-field': {
-    severity: 'review',
+    severity: 'fix',
+    decided: true,
     recommendation:
-      'Search inputs show lucide Search (SearchBar), lucide TextSearch (Find) and tabler IconSearch (Command, language picker). Use lucide Search for all search fields.',
+      'Decided: use lucide Search for every search field. Search inputs show lucide Search (SearchBar), lucide TextSearch (Find) and tabler IconSearch (Command, language picker) today; replace TextSearch and IconSearch with Search.',
   },
   'concept:selected': {
-    severity: 'review',
+    severity: 'fix',
+    decided: true,
     recommendation:
-      'Selection marks use lucide Check in components and tabler IconCheck in the shadcn primitives. They render almost the same; standardize on one library.',
+      'Decided: no Tabler icons; a checkmark means checked or selected. Selection marks use lucide Check in components and tabler IconCheck in the shadcn primitives; replace IconCheck with lucide Check.',
   },
   'concept:sort-ascending': {
     severity: 'fix',
+    decided: true,
     recommendation:
-      'Ascending sort is ArrowUp in the inventory and ChevronUp on Home and Get Resources. Use ArrowUp/ArrowDown (with ChevronsUpDown or ArrowUpDown for unsorted) so sort arrows are not confused with dropdown chevrons.',
+      'Decided: sort with ArrowUp / ArrowDown, so sort arrows are not confused with dropdown chevrons. Ascending sort is ArrowUp in the inventory and ChevronUp on Home and Get Resources; move ChevronUp to ArrowUp. For unsorted columns, see "ChevronsUpDown".',
   },
   'concept:sort-descending': {
     severity: 'fix',
-    recommendation: 'See "Sorted ascending": use ArrowDown.',
+    decided: true,
+    recommendation: 'Decided: see "Sorted ascending": use ArrowDown.',
   },
   'concept:submit': {
-    severity: 'acceptable',
+    severity: 'fix',
+    decided: true,
     recommendation:
-      'Dialogs submit with Check; comment boxes submit with ArrowUp, the familiar "send message" shape. Keep, but use ArrowUp only for message-style inputs.',
+      'Decided: never use ArrowUp or Check for submit: ArrowUp is for sorting and a checkmark means checked or selected. Dialogs submit with Check and comment boxes with ArrowUp today; both change. The submit icon is to be chosen by UX.',
   },
   'concept:success': {
-    severity: 'review',
+    severity: 'fix',
+    decided: true,
     recommendation:
-      'See "Informational notice": toasts use tabler IconCircleCheck; use lucide CircleCheck.',
+      'Decided: no Tabler icons. Toasts use tabler IconCircleCheck; replace it with lucide CircleCheck.',
   },
   'concept:undo': {
     severity: 'fix',
-    recommendation: 'See "Redo": use Undo2.',
+    decided: true,
+    recommendation: 'Decided: see "Redo": use Undo2.',
   },
   'concept:user-profile': {
     severity: 'review',
@@ -3037,8 +3059,9 @@ export const ICON_CONFLICT_NOTES: Record<string, IconConflictNote> = {
   },
   'concept:warning': {
     severity: 'fix',
+    decided: true,
     recommendation:
-      'Warnings use TriangleAlert, CircleAlert (registration notice, extension host restarting), Info (enhanced resources warning ribbons) and tabler IconAlertTriangle (toasts). Use TriangleAlert for every warning; Info on a warning ribbon undersells it.',
+      'Decided: TriangleAlert for every warning, CircleAlert for errors. Warnings use TriangleAlert, CircleAlert (registration notice, extension host restarting), Info (enhanced resources warning ribbons) and tabler IconAlertTriangle (toasts) today; move the CircleAlert, Info and IconAlertTriangle warnings to TriangleAlert.',
   },
   'concept:zoom-in': {
     severity: 'acceptable',
@@ -3068,8 +3091,9 @@ export const ICON_CONFLICT_NOTES: Record<string, IconConflictNote> = {
   },
   'icon:ArrowUp': {
     severity: 'fix',
+    decided: true,
     recommendation:
-      'ArrowUp means submit (comments), sorted ascending (inventory) and back (enhanced resources dictionary). Replace the "back" use with ArrowLeft.',
+      'Decided: ArrowUp is for sorting (with ArrowDown). It also means submit (comments) and back (enhanced resources dictionary) today: move back to ArrowLeft and submit to the submit icon UX chooses (see "Submit or confirm").',
   },
   'icon:Ban': {
     severity: 'review',
@@ -3078,28 +3102,32 @@ export const ICON_CONFLICT_NOTES: Record<string, IconConflictNote> = {
   },
   'icon:BookA': {
     severity: 'fix',
+    decided: true,
     recommendation:
-      'BookA is the dictionary icon across the app, but also marks "Book names" in Manage books and the lexical semantic domain. Give "Book names" a different icon (for example BookType).',
+      'Decided: BookA stays the dictionary icon. It also marks "Book names" in Manage books and the lexical semantic domain; give "Book names" a different icon, to be chosen by UX.',
   },
   'icon:Book': {
-    severity: 'review',
+    severity: 'fix',
+    decided: true,
     recommendation:
-      'Book means "verse text hidden" in the checklist and "Bible texts panel" in the editor menu. Fixing the Bible texts panel conflict resolves this.',
+      'Decided: see "Bible texts panel": the Bible texts menu item moves to BookOpen, which leaves Book only for "verse text hidden" in the checklist.',
   },
   'icon:BookOpen': {
     severity: 'review',
     recommendation:
-      'BookOpen is the resource icon, the Bible texts panel tab, the Get Resources header and "verse text shown" in the checklist. The resource meanings belong together; consider Eye/EyeOff or Text for the checklist verse-text toggle.',
+      'Decided in part: BookOpen is the resource icon and the Bible texts panel icon (menu and tab), and the Get Resources header moves to Download. Still open: "verse text shown" in the checklist; consider Eye/EyeOff or Text for the checklist verse-text toggle.',
   },
   'icon:Check': {
-    severity: 'acceptable',
+    severity: 'fix',
+    decided: true,
     recommendation:
-      'Check is the general "yes" mark: selected, done, submit, resolve, allow. The meanings are compatible; keep.',
+      'Decided: a checkmark means checked or selected, so stop using Check for submit (see "Submit or confirm"). Its other meanings (selected, done, resolve, allow) are compatible; keep those.',
   },
   'icon:ChevronDown': {
-    severity: 'review',
+    severity: 'fix',
+    decided: true,
     recommendation:
-      'ChevronDown opens dropdowns, marks expanded sections, steps to the next verse or search result, and marks a descending sort. Move sorting to arrows (see "Sorted descending"); the rest are conventional.',
+      'Decided: move sorting to arrows (see "Sorted descending"). Opening dropdowns, marking expanded sections and stepping to the next verse or search result are conventional; keep those.',
   },
   'icon:ChevronLeft': {
     severity: 'acceptable',
@@ -3111,9 +3139,9 @@ export const ICON_CONFLICT_NOTES: Record<string, IconConflictNote> = {
       'Collapsed section, breadcrumb separator, next page and next media item are all conventional uses of ChevronRight. Keep.',
   },
   'icon:ChevronUp': {
-    severity: 'review',
+    severity: 'fix',
     recommendation:
-      'ChevronUp steps to the previous verse or search result, scrolls to the top, marks expanded comment replies and an ascending sort. Move sorting to arrows and expanded replies to ChevronDown.',
+      'Decided in part: sorting moves to ArrowUp (see "Sorted ascending"). ChevronUp also steps to the previous verse or search result, scrolls to the top, and marks expanded comment replies; move expanded replies to ChevronDown (see "Expanded section").',
   },
   'icon:ChevronsUpDown': {
     severity: 'review',
@@ -3121,12 +3149,16 @@ export const ICON_CONFLICT_NOTES: Record<string, IconConflictNote> = {
       'ChevronsUpDown opens multi-select dropdowns and also marks an unsorted, sortable column. Use ArrowUpDown for sortable columns.',
   },
   'icon:CircleAlert': {
-    severity: 'review',
-    recommendation: 'See "Warning" and "Error": keep CircleAlert for errors only.',
+    severity: 'fix',
+    decided: true,
+    recommendation:
+      'Decided: CircleAlert is for errors only; move its warning uses to TriangleAlert (see "Warning").',
   },
   'icon:CircleCheck': {
     severity: 'acceptable',
-    recommendation: 'Success, and "approved" in the inventory. Compatible meanings; keep.',
+    decided: true,
+    recommendation:
+      'Decided: CircleCheck is also the Checks icon (see "Checks"), alongside success and "approved" in the inventory. Keep.',
   },
   'icon:CircleQuestionMark': {
     severity: 'review',
@@ -3139,9 +3171,10 @@ export const ICON_CONFLICT_NOTES: Record<string, IconConflictNote> = {
       'Copy means copy to the clipboard and copy books into another project; both are "copy". Keep.',
   },
   'icon:Download': {
-    severity: 'review',
+    severity: 'fix',
+    decided: true,
     recommendation:
-      'See "Import books": move import to FolderInput so Download only means getting resources.',
+      'Decided: Download is for getting resources (the "Get resources" menu item and the Get Resources header); move import to the lucide Import icon (see "Import books").',
   },
   'icon:Ellipsis': {
     severity: 'acceptable',
@@ -3155,8 +3188,9 @@ export const ICON_CONFLICT_NOTES: Record<string, IconConflictNote> = {
   },
   'icon:FileText': {
     severity: 'fix',
+    decided: true,
     recommendation:
-      'FileText is both "show footnotes" in the editor menu and the commentaries panel tab. See "Commentaries panel".',
+      'Decided: FileText stays "show footnotes" in the editor menu; the commentaries panel tab moves to BookMarked (see "Commentaries panel").',
   },
   'icon:FolderOpen': {
     severity: 'review',
@@ -3168,8 +3202,9 @@ export const ICON_CONFLICT_NOTES: Record<string, IconConflictNote> = {
       'Funnel means filter, but the data table "View" button uses it to choose visible columns. Use Columns3 or Settings2 there.',
   },
   'icon:Info': {
-    severity: 'review',
-    recommendation: 'See "Warning" and "Help or guide": keep Info for notices and descriptions.',
+    severity: 'fix',
+    recommendation:
+      'Decided in part: the enhanced resources warning ribbons move to TriangleAlert (see "Warning"). Keep Info for notices and descriptions; see "Help or guide" for the guide button.',
   },
   'icon:Minus': {
     severity: 'acceptable',
@@ -3182,7 +3217,9 @@ export const ICON_CONFLICT_NOTES: Record<string, IconConflictNote> = {
   },
   'icon:Search': {
     severity: 'acceptable',
-    recommendation: 'The Find panel and a search field adornment are the same idea. Keep.',
+    decided: true,
+    recommendation:
+      'Decided: Search is the search icon everywhere, so the Find panel and a search field adornment share it. Keep.',
   },
   'icon:Undo2': {
     severity: 'acceptable',
@@ -3199,7 +3236,9 @@ export const ICON_CONFLICT_NOTES: Record<string, IconConflictNote> = {
       'X closes, dismisses, clears and removes (fine), cancels (fine), but also denies a check result and marks a book as untracked. Consider Ban for "deny" and a status icon for "untracked".',
   },
   'icon:TriangleAlert': {
-    severity: 'review',
-    recommendation: 'See "Error": keep TriangleAlert for warnings only.',
+    severity: 'fix',
+    decided: true,
+    recommendation:
+      'Decided: TriangleAlert is for warnings only; move its error uses to CircleAlert (see "Error").',
   },
 };

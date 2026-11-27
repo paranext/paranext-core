@@ -92,9 +92,12 @@ function ConflictRow({
       <TableCell className="tw:align-top tw:whitespace-normal">
         <div className="tw:flex tw:flex-col tw:gap-1">
           {note && (
-            <Badge variant={SEVERITY_BADGE_VARIANTS[note.severity]} className="tw:self-start">
-              {SEVERITY_LABELS[note.severity]}
-            </Badge>
+            <div className="tw:flex tw:flex-wrap tw:gap-1">
+              <Badge variant={SEVERITY_BADGE_VARIANTS[note.severity]}>
+                {SEVERITY_LABELS[note.severity]}
+              </Badge>
+              {note.decided && <Badge variant="outline">Decided</Badge>}
+            </div>
           )}
           <span className="tw:font-medium">{getConflictTitle(conflict)}</span>
         </div>

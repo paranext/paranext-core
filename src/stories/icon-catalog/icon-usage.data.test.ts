@@ -173,4 +173,18 @@ describe('ICON_CONFLICT_NOTES', () => {
       .sort();
     expect(Object.keys(ICON_CONFLICT_NOTES).sort()).toEqual(conflictIds);
   });
+
+  it('never leaves a decided conflict at review', () => {
+    const decidedForReview = Object.entries(ICON_CONFLICT_NOTES)
+      .filter(([, note]) => note.decided && note.severity === 'review')
+      .map(([id]) => id);
+    expect(decidedForReview).toEqual([]);
+  });
+
+  it('states the decision in the recommendation exactly when the note is decided', () => {
+    const mismatched = Object.entries(ICON_CONFLICT_NOTES)
+      .filter(([, note]) => Boolean(note.decided) !== note.recommendation.startsWith('Decided:'))
+      .map(([id]) => id);
+    expect(mismatched).toEqual([]);
+  });
 });

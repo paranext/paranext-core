@@ -43,6 +43,28 @@ describe('IconCatalog', () => {
     expect(screen.getByText('Fix')).toBeInTheDocument();
   });
 
+  it('marks a conflict the UX lead has decided', () => {
+    render(
+      <IconCatalog
+        entries={ENTRIES}
+        conflictNotes={{
+          'icon:X': { severity: 'fix', decided: true, recommendation: 'Decided: use Ban.' },
+        }}
+      />,
+    );
+    expect(screen.getByText('Decided')).toBeInTheDocument();
+  });
+
+  it('shows no decided mark on a conflict that is still open', () => {
+    render(
+      <IconCatalog
+        entries={ENTRIES}
+        conflictNotes={{ 'icon:X': { severity: 'review', recommendation: 'Consider Ban.' } }}
+      />,
+    );
+    expect(screen.queryByText('Decided')).not.toBeInTheDocument();
+  });
+
   it('still shows a conflict that has no recommendation yet', () => {
     render(<IconCatalog entries={ENTRIES} conflictNotes={{}} />);
     expect(screen.getByText('X used for 2 meanings')).toBeInTheDocument();

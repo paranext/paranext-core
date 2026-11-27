@@ -11,8 +11,38 @@ It is rendered by the `IconCatalog` component on the core Storybook's **Referenc
 ### Before you pick an icon
 
 Look it up on that page. Reuse the icon the app already draws for the meaning you need, and do not
-pick an icon that already means something else. Prefer `lucide-react`; the tabler icons belong to the
-shadcn primitives.
+pick an icon that already means something else.
+
+- **No Tabler icons.** Use `lucide-react` only; do not add an `@tabler/icons-react` import, and when
+  you touch one, replace it with the lucide equivalent (lucide `X` for close, `Check` for selected).
+- **Never `Check` or `ArrowUp` for submit.** A checkmark means checked or selected; `ArrowUp` is for
+  sorting. The submit icon is still to be chosen by UX.
+
+### Decided icons
+
+The UX lead's decisions are listed in the page's **UX decisions** section
+(`src/stories/icon-catalog.mdx`) and stated in each decided note in `ICON_CONFLICT_NOTES`
+(`decided: true`). Follow them over the icon the code uses today:
+
+| Meaning                    | Use                                  | Not                                |
+| -------------------------- | ------------------------------------ | ---------------------------------- |
+| Bible texts panel          | `BookOpen` (as for resources)        | `Book`                             |
+| Checks                     | `CircleCheck`                        | `CircleCheckBig`, `ClipboardCheck` |
+| Commentaries panel         | `BookMarked`                         | `FileText`                         |
+| Edit                       | `Pen`                                | `Pencil`                           |
+| Error / warning            | `CircleAlert` / `TriangleAlert`      | `Info`, tabler alert icons         |
+| Import                     | `Import`                             | `FolderInput`, `Download`          |
+| Back                       | `ArrowLeft`                          | `ArrowUp`                          |
+| Opens outside the app      | `ExternalLink`                       | `Link`                             |
+| Undo / redo                | `Undo2` / `Redo2`                    | `Undo`, `Redo`                     |
+| Sorting                    | `ArrowUp` / `ArrowDown`              | `ChevronUp`, `ChevronDown`         |
+| Book names                 | to be chosen by UX                   | `BookA` (the dictionary icon)      |
+| Get Resources              | `Download`                           | `BookOpen`                         |
+| Language                   | `Languages`                          | `Globe`                            |
+| Search                     | `Search`                             | `TextSearch`, tabler `IconSearch`  |
+
+When the UX lead decides another conflict, add it to that section and mark its note `decided: true`
+with a recommendation that starts with "Decided:".
 
 ### The rule
 
