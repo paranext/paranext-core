@@ -133,6 +133,14 @@ export {
 } from './components/advanced/use-marker-palette-focus-out-capture.hook';
 export { isEditorContextMenuOpenFor } from './components/advanced/editor-context-menu.util';
 export {
+  AnchoredTabMenu,
+  type AnchoredTabMenuProps,
+  type OpenTabMenuInOverlay,
+  type TabMenuOverlayOptions,
+  type TabMenuTriggerRect,
+  type TabMenuSubmenuContentProps,
+} from './components/advanced/menus/tab-dropdown-menu.component';
+export {
   default as NavigationHistoryButtons,
   NAVIGATION_HISTORY_BUTTONS_STRING_KEYS,
   type NavigationHistoryButtonsProps,

@@ -65,6 +65,7 @@ export function TabToolbar({
   centerAreaChildren,
   endAreaChildren,
   menuButtonIcon,
+  openMenuInOverlay,
 }: TabToolbarProps) {
   return (
     <TabToolbarContainer className={`tw:w-full tw:border-b ${className}`} id={id}>
@@ -76,6 +77,7 @@ export function TabToolbar({
           icon={menuButtonIcon ?? <Menu />}
           buttonVariant="ghost"
           showSectionHeadings
+          openMenuInOverlay={openMenuInOverlay}
         />
       )}
       {/* Absorbing zone. `tw:min-w-0` is what lets the flex algorithm shrink this below its content
@@ -114,6 +116,7 @@ export function TabToolbar({
             icon={<EllipsisVertical />}
             className="tw:h-full"
             showSectionHeadings
+            openMenuInOverlay={openMenuInOverlay}
           />
         )}
         {endAreaChildren}
