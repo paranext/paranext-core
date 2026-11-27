@@ -82,6 +82,7 @@ import { ReactNode, UIEvent, useEffect, useMemo, useRef, useState } from 'react'
 // User-facing strings collected in one place. In production these would be pulled from the
 // localization store; the prototype uses English defaults so the design idea is legible in isolation.
 const STRINGS = {
+  moreOptions: 'More options',
   headerTitle: 'Home',
   searchPlaceholder: 'Search projects & resources by name, language, or type',
   filterType: 'Type',
@@ -1065,11 +1066,21 @@ export function HomeUnified({
     if (extras.length === 0) return undefined;
     return (
       <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon" className="tw:h-7 tw:w-7">
-            <Ellipsis className="tw:h-4 tw:w-4" />
-          </Button>
-        </DropdownMenuTrigger>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <DropdownMenuTrigger asChild>
+              <Button
+                aria-label={STRINGS.moreOptions}
+                variant="ghost"
+                size="icon"
+                className="tw:h-7 tw:w-7"
+              >
+                <Ellipsis className="tw:h-4 tw:w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+          </TooltipTrigger>
+          <TooltipContent>{STRINGS.moreOptions}</TooltipContent>
+        </Tooltip>
         <DropdownMenuContent align="end">
           {extras.map((extra) => (
             <DropdownMenuItem
@@ -1792,15 +1803,21 @@ export function HomeUnified({
                                     if (overflowKinds.length === 0) return undefined;
                                     return (
                                       <DropdownMenu>
-                                        <DropdownMenuTrigger asChild>
-                                          <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            className="tw:h-7 tw:w-7"
-                                          >
-                                            <Ellipsis className="tw:h-4 tw:w-4" />
-                                          </Button>
-                                        </DropdownMenuTrigger>
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <DropdownMenuTrigger asChild>
+                                              <Button
+                                                aria-label={STRINGS.moreOptions}
+                                                variant="ghost"
+                                                size="icon"
+                                                className="tw:h-7 tw:w-7"
+                                              >
+                                                <Ellipsis className="tw:h-4 tw:w-4" />
+                                              </Button>
+                                            </DropdownMenuTrigger>
+                                          </TooltipTrigger>
+                                          <TooltipContent>{STRINGS.moreOptions}</TooltipContent>
+                                        </Tooltip>
                                         <DropdownMenuContent align="end">
                                           {overflowKinds.map((k) => (
                                             <DropdownMenuItem
@@ -2728,15 +2745,23 @@ export function HomeUnified({
                                         {overflowKinds.length > 0 && (
                                           <div className="tw:ms-auto">
                                             <DropdownMenu>
-                                              <DropdownMenuTrigger asChild>
-                                                <Button
-                                                  variant="ghost"
-                                                  size="icon"
-                                                  className="tw:h-7 tw:w-7"
-                                                >
-                                                  <Ellipsis className="tw:h-4 tw:w-4" />
-                                                </Button>
-                                              </DropdownMenuTrigger>
+                                              <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                  <DropdownMenuTrigger asChild>
+                                                    <Button
+                                                      aria-label={STRINGS.moreOptions}
+                                                      variant="ghost"
+                                                      size="icon"
+                                                      className="tw:h-7 tw:w-7"
+                                                    >
+                                                      <Ellipsis className="tw:h-4 tw:w-4" />
+                                                    </Button>
+                                                  </DropdownMenuTrigger>
+                                                </TooltipTrigger>
+                                                <TooltipContent>
+                                                  {STRINGS.moreOptions}
+                                                </TooltipContent>
+                                              </Tooltip>
                                               {/* Dropdown menus render via portal at
                                                   document.body with a base tw:z-50, which is
                                                   below the modal's Z_INDEX_MODAL (500). Bump

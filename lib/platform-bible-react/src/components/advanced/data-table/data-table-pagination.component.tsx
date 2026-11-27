@@ -3,6 +3,12 @@ import { Table } from '@tanstack/react-table';
 
 import { Button } from '@/components/shadcn-ui/button';
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/shadcn-ui/tooltip';
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -45,48 +51,70 @@ export function DataTablePagination<TData>({ table }: DataTablePaginationProps<T
         <div className="tw:flex tw:w-[100px] tw:items-center tw:justify-center tw:text-sm tw:font-medium">
           Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}
         </div>
-        <div className="tw:flex tw:items-center tw:space-x-2">
-          <Button
-            variant="outline"
-            size="icon"
-            className="tw:hidden tw:h-8 tw:w-8 tw:p-0 tw:lg:flex"
-            onClick={() => table.setPageIndex(0)}
-            disabled={!table.getCanPreviousPage()}
-          >
-            <span className="tw:sr-only">Go to first page</span>
-            <ArrowLeftIcon className="tw:h-4 tw:w-4" />
-          </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            className="tw:h-8 tw:w-8 tw:p-0"
-            onClick={() => table.previousPage()}
-            disabled={!table.getCanPreviousPage()}
-          >
-            <span className="tw:sr-only">Go to previous page</span>
-            <ChevronLeftIcon className="tw:h-4 tw:w-4" />
-          </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            className="tw:h-8 tw:w-8 tw:p-0"
-            onClick={() => table.nextPage()}
-            disabled={!table.getCanNextPage()}
-          >
-            <span className="tw:sr-only">Go to next page</span>
-            <ChevronRightIcon className="tw:h-4 tw:w-4" />
-          </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            className="tw:hidden tw:h-8 tw:w-8 tw:p-0 tw:lg:flex"
-            onClick={() => table.setPageIndex(table.getPageCount() - 1)}
-            disabled={!table.getCanNextPage()}
-          >
-            <span className="tw:sr-only">Go to last page</span>
-            <ArrowRightIcon className="tw:h-4 tw:w-4" />
-          </Button>
-        </div>
+        <TooltipProvider>
+          <div className="tw:flex tw:items-center tw:space-x-2">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="tw:hidden tw:h-8 tw:w-8 tw:p-0 tw:lg:flex"
+                  onClick={() => table.setPageIndex(0)}
+                  disabled={!table.getCanPreviousPage()}
+                >
+                  <span className="tw:sr-only">Go to first page</span>
+                  <ArrowLeftIcon className="tw:h-4 tw:w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Go to first page</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="tw:h-8 tw:w-8 tw:p-0"
+                  onClick={() => table.previousPage()}
+                  disabled={!table.getCanPreviousPage()}
+                >
+                  <span className="tw:sr-only">Go to previous page</span>
+                  <ChevronLeftIcon className="tw:h-4 tw:w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Go to previous page</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="tw:h-8 tw:w-8 tw:p-0"
+                  onClick={() => table.nextPage()}
+                  disabled={!table.getCanNextPage()}
+                >
+                  <span className="tw:sr-only">Go to next page</span>
+                  <ChevronRightIcon className="tw:h-4 tw:w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Go to next page</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="tw:hidden tw:h-8 tw:w-8 tw:p-0 tw:lg:flex"
+                  onClick={() => table.setPageIndex(table.getPageCount() - 1)}
+                  disabled={!table.getCanNextPage()}
+                >
+                  <span className="tw:sr-only">Go to last page</span>
+                  <ArrowRightIcon className="tw:h-4 tw:w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Go to last page</TooltipContent>
+            </Tooltip>
+          </div>
+        </TooltipProvider>
       </div>
     </div>
   );

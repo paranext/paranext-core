@@ -1,8 +1,22 @@
 import { cn } from '@/utils/shadcn-ui/utils';
 import { MoreVertical } from 'lucide-react';
 import React, { ReactNode, useState } from 'react';
+import { resolveLocalizedString } from '@/utils/localization.util';
+import { LocalizedStringValue } from 'platform-bible-utils';
 import { Button } from '../shadcn-ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '../shadcn-ui/dropdown-menu';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../shadcn-ui/tooltip';
+
+/**
+ * Object containing all keys used for localization in this component. If you're using this
+ * component in an extension, you can pass it into the useLocalizedStrings hook to easily obtain the
+ * localized strings and pass them into the localizedStrings prop of this component
+ */
+export const RESULTS_CARD_STRING_KEYS = Object.freeze(['%general_moreOptions%'] as const);
+
+export type ResultsCardLocalizedStrings = {
+  [localizedKey in (typeof RESULTS_CARD_STRING_KEYS)[number]]?: LocalizedStringValue;
+};
 
 /** Props interface for the ResultsCard base component */
 export interface ResultsCardProps {
@@ -32,6 +46,11 @@ export interface ResultsCardProps {
   additionalContent?: ReactNode;
   /** Color to use for the card's accent border */
   accentColor?: string;
+  /**
+   * Localized strings for this component. Relevant keys can be found in `RESULTS_CARD_STRING_KEYS`;
+   * each falls back to English when absent.
+   */
+  localizedStrings?: ResultsCardLocalizedStrings;
 }
 
 /**
@@ -53,7 +72,12 @@ export function ResultsCard({
   additionalContent,
   accentColor,
   showDropdownOnHover = false,
+  localizedStrings,
 }: ResultsCardProps) {
+  const moreOptionsLabel = resolveLocalizedString(
+    localizedStrings?.['%general_moreOptions%'],
+    'More options',
+  );
   const handleKeyDown = (event: React.KeyboardEvent) => {
     if (event.key === 'Enter' || event.key === ' ') {
       // Only handle keyboard activation on the card itself, not on focusable children
@@ -107,21 +131,30 @@ export function ResultsCard({
               )}
             >
               <DropdownMenu>
-                <DropdownMenuTrigger className={cn(accentColor && 'tw:me-1')} asChild>
-                  <Button
-                    className="tw:m-1 tw:h-6 tw:w-6"
-                    variant="ghost"
-                    size="icon"
-                    // Stop click/focus from bubbling to the card wrapper: onClick would call
-                    // onSelect, and focus would reach the enclosing card/consumer wrapper (e.g.
-                    // SearchResult's onFocus, which selects and previews the result) — neither should
-                    // fire just because the user reached for this card's dropdown menu button.
-                    onClick={(e) => e.stopPropagation()}
-                    onFocus={(e) => e.stopPropagation()}
-                  >
-                    <MoreVertical />
-                  </Button>
-                </DropdownMenuTrigger>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <DropdownMenuTrigger className={cn(accentColor && 'tw:me-1')} asChild>
+                        <Button
+                          className="tw:m-1 tw:h-6 tw:w-6"
+                          variant="ghost"
+                          size="icon"
+                          aria-label={moreOptionsLabel}
+                          // Stop click/focus from bubbling to the card wrapper: onClick would call
+                          // onSelect, and focus would reach the enclosing card/consumer wrapper
+                          // (e.g. SearchResult's onFocus, which selects and previews the result) —
+                          // neither should fire just because the user reached for this card's
+                          // dropdown menu button.
+                          onClick={(e) => e.stopPropagation()}
+                          onFocus={(e) => e.stopPropagation()}
+                        >
+                          <MoreVertical />
+                        </Button>
+                      </DropdownMenuTrigger>
+                    </TooltipTrigger>
+                    <TooltipContent>{moreOptionsLabel}</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
                 <DropdownMenuContent align="end">{dropdownContent}</DropdownMenuContent>
               </DropdownMenu>
             </div>

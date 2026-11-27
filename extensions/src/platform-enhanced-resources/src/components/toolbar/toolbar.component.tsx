@@ -289,11 +289,16 @@ export function EnhancedResourceTopToolbar({
 
   const projectMenuTrigger = (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" aria-label={tabMenuLabel}>
-          <Menu className="tw:h-4 tw:w-4" />
-        </Button>
-      </DropdownMenuTrigger>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" aria-label={tabMenuLabel}>
+              <Menu className="tw:h-4 tw:w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+        </TooltipTrigger>
+        <TooltipContent>{tabMenuLabel}</TooltipContent>
+      </Tooltip>
       <DropdownMenuContent align="start" className="tw:min-w-56">
         <DropdownMenuCheckboxItem
           checked={viewMenu.showFootnotes}
@@ -682,15 +687,22 @@ export function EnhancedResourceTabBar({
             )}
           />
           {filterActive && (
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label={filterClearLabel}
-              onClick={() => onSearchChange('')}
-              className={cn('tw:h-6 tw:w-6 tw:shrink-0', filterInputTextClass)}
-            >
-              <X className="tw:h-3.5 tw:w-3.5" />
-            </Button>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label={filterClearLabel}
+                    onClick={() => onSearchChange('')}
+                    className={cn('tw:h-6 tw:w-6 tw:shrink-0', filterInputTextClass)}
+                  >
+                    <X className="tw:h-3.5 tw:w-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{filterClearLabel}</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           )}
         </div>
 

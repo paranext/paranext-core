@@ -4,6 +4,7 @@ import {
   ContentZoomRoot,
   DropdownMenuItem,
   ResultsCard,
+  RESULTS_CARD_STRING_KEYS,
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -20,6 +21,7 @@ import { formatScrRef, LanguageStrings } from 'platform-bible-utils';
  * prop.
  */
 export const CHECK_CARD_STRING_KEYS = Object.freeze([
+  ...RESULTS_CARD_STRING_KEYS,
   '%webView_checksSidePanel_fixedBadge_title%',
   '%webView_checksSidePanel_deniedBadge_title%',
   '%webView_checksSidePanel_checkingBadge_title%',
@@ -235,6 +237,7 @@ export function CheckCard({
       isDenied={isFixedOrDenied}
       dropdownContent={dropdownContent}
       additionalContent={additionalSelectedContent}
+      localizedStrings={localizedStrings}
     >
       {cardContent}
     </ResultsCard>

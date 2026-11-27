@@ -2,6 +2,12 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { Toolbar } from '@/components/advanced/toolbar.component';
 import { Button } from '@/components/shadcn-ui/button';
 import { Input } from '@/components/shadcn-ui/input';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/shadcn-ui/tooltip';
 import { Search, Save, Settings, Share } from 'lucide-react';
 
 const meta: Meta<typeof Toolbar> = {
@@ -100,12 +106,24 @@ export const WithMenuBar: Story = {
 export const MinimalToolbar: Story = {
   render: () => (
     <Toolbar onSelectMenuItem={(menuItemId) => console.log('Selected:', menuItemId)}>
-      <Button variant="ghost" size="sm">
-        <Save className="tw:h-4 tw:w-4" />
-      </Button>
-      <Button variant="ghost" size="sm">
-        <Share className="tw:h-4 tw:w-4" />
-      </Button>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button variant="ghost" size="sm" aria-label="Save">
+              <Save className="tw:h-4 tw:w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Save</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button variant="ghost" size="sm" aria-label="Share">
+              <Share className="tw:h-4 tw:w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Share</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
     </Toolbar>
   ),
   parameters: {

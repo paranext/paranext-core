@@ -12,7 +12,15 @@ import { Button } from '@/components/shadcn-ui/button';
 import { Input } from '@/components/shadcn-ui/input';
 import { Separator } from '@/components/shadcn-ui/separator';
 import { Skeleton } from '@/components/shadcn-ui/skeleton';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/shadcn-ui/tooltip';
+// CUSTOM: Import resolveLocalizedString so an unresolved SidebarTrigger label falls back to English
+import { resolveLocalizedString } from '@/utils/localization.util';
+// CUSTOM: Also import TooltipProvider so SidebarTrigger can supply the provider its tooltip needs
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/shadcn-ui/tooltip';
 // CUSTOM: Added PanelRight import so SidebarTrigger can flip its icon based on the active side
 import { IconLayoutSidebar, IconLayoutSidebarRight } from '@tabler/icons-react';
 // CUSTOM: Added Direction and readDirection imports for RTL-aware side computation
@@ -251,27 +259,49 @@ function Sidebar({
 }
 
 /** @inheritdoc SidebarProvider */
-function SidebarTrigger({ className, onClick, ...props }: React.ComponentProps<typeof Button>) {
+function SidebarTrigger({
+  className,
+  onClick,
+  // CUSTOM: Added label so callers can localize the trigger's accessible name and tooltip, which
+  // shadcn hard-codes as English "Toggle Sidebar"
+  label,
+  ...props
+}: React.ComponentProps<typeof Button> & {
+  /** Localized accessible name and tooltip of the trigger. Defaults to `Toggle Sidebar`. */
+  label?: string;
+}) {
   const { toggleSidebar, side } = useSidebar();
+  // CUSTOM: Resolve the label once; it is both the screen-reader text and the tooltip
+  const toggleLabel = resolveLocalizedString(label, 'Toggle Sidebar');
 
+  // CUSTOM: Wrapped the icon-only trigger in a Tooltip showing the same label as its sr-only text,
+  // so sighted users can learn what the icon does (every icon button needs a tooltip; see
+  // Guidelines/Tooltips). It has its own TooltipProvider because SidebarProvider does not supply one.
   return (
-    <Button
-      data-sidebar="trigger"
-      data-slot="sidebar-trigger"
-      variant="ghost"
-      size="icon-sm"
-      className={cn(className)}
-      onClick={(event) => {
-        onClick?.(event);
-        toggleSidebar();
-      }}
-      {...props}
-    >
-      {/* CUSTOM: Renders PanelLeft or PanelRight based on context.side so the icon always points
-          toward the sidebar's current position (accounting for RTL direction) */}
-      {side === 'primary' ? <IconLayoutSidebar /> : <IconLayoutSidebarRight />}
-      <span className="tw:sr-only">Toggle Sidebar</span>
-    </Button>
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            data-sidebar="trigger"
+            data-slot="sidebar-trigger"
+            variant="ghost"
+            size="icon-sm"
+            className={cn(className)}
+            onClick={(event) => {
+              onClick?.(event);
+              toggleSidebar();
+            }}
+            {...props}
+          >
+            {/* CUSTOM: Renders PanelLeft or PanelRight based on context.side so the icon always points
+                toward the sidebar's current position (accounting for RTL direction) */}
+            {side === 'primary' ? <IconLayoutSidebar /> : <IconLayoutSidebarRight />}
+            <span className="tw:sr-only">{toggleLabel}</span>
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>{toggleLabel}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }
 

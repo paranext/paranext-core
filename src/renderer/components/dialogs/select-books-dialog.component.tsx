@@ -1,11 +1,24 @@
 import { Check } from 'lucide-react';
-import { Button, CheckboxGroup, Label } from 'platform-bible-react';
+import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
+import {
+  Button,
+  CheckboxGroup,
+  Label,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from 'platform-bible-react';
 import { useState } from 'react';
 import { Canon } from '@sillsdev/scripture';
 import { LocalizeKey } from 'platform-bible-utils';
 import { DIALOG_BASE } from './dialog-base.data';
 import { DialogDefinition, DialogTypes, SELECT_BOOKS_DIALOG_TYPE } from './dialog-definition.model';
 import './select-books-dialog.component.scss';
+
+const SUBMIT_KEY = '%general_button_submit%';
+/** Stable across renders, as `useLocalizedStrings` requires */
+const STRING_KEYS: LocalizeKey[] = [SUBMIT_KEY];
 
 /**
  * @deprecated 2026-05-13. This dialog is no longer used by Platform.Bible and will be removed in a
@@ -22,6 +35,8 @@ function SelectBooksDialog({
   );
 
   const [selectedBookIds, setSelectedBookIds] = useState<string[]>(initialSelectedBookIds || []);
+  const [localizedStrings] = useLocalizedStrings(STRING_KEYS);
+  const submitLabel = localizedStrings[SUBMIT_KEY];
 
   const handleBookToggle = (toggledBookId: string) => {
     if (selectedBookIds.includes(toggledBookId)) {
@@ -45,12 +60,20 @@ function SelectBooksDialog({
           selectedListItems={selectedBookIds}
         />
       </div>
-      <Button
-        className="select-books-dialog-submit-button"
-        onClick={() => submitDialog(selectedBookIds)}
-      >
-        <Check />
-      </Button>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              className="select-books-dialog-submit-button"
+              aria-label={submitLabel}
+              onClick={() => submitDialog(selectedBookIds)}
+            >
+              <Check />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{submitLabel}</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
     </div>
   );
 }

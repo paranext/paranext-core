@@ -2,8 +2,15 @@
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { vi } from 'vitest';
+import userEvent from '@testing-library/user-event';
+import { beforeAll, vi } from 'vitest';
+import { installNoopResizeObserver } from '@/test-utils/resize-observer.util';
 import { ErrorDump } from './error-dump.component';
+
+// Radix positions an open tooltip with a ResizeObserver, which jsdom lacks
+beforeAll(() => {
+  installNoopResizeObserver();
+});
 
 const COPY_LABEL = 'Copy error details';
 
@@ -72,5 +79,21 @@ describe('ErrorDump copy button', () => {
       setTimeout(resolve, 0);
     });
     expect(handleCopyNotify).not.toHaveBeenCalled();
+  });
+});
+
+describe('ErrorDump copy button tooltip', () => {
+  it('shows the localized label as a hover tooltip', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <ErrorDump
+        errorDetails="Something broke"
+        localizedStrings={{ '%webView_error_dump_copy_button%': COPY_LABEL }}
+      />,
+    );
+
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+    await user.hover(screen.getByRole('button', { name: COPY_LABEL }));
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(COPY_LABEL);
   });
 });

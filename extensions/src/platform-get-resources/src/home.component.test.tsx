@@ -1311,16 +1311,20 @@ describe('Home row type and details', () => {
   });
 
   /**
-   * Lays out only a row's tooltip triggers, so ←/→ walks just those. The table's ←/→ handling skips
-   * controls with no client rects as hidden, and jsdom gives every element none.
+   * Lays out only a row's details tooltip triggers, so ←/→ walks just those. The table's ←/→
+   * handling skips controls with no client rects as hidden, and jsdom gives every element none. The
+   * row's menu buttons carry a tooltip too, but the narrow-width one is hidden at the widths these
+   * tests model, so triggers that open a menu stay unlaid-out.
    */
   const layOutTooltipTriggers = (row: HTMLElement) => {
-    row.querySelectorAll('[data-slot="tooltip-trigger"]').forEach((trigger) =>
-      Object.defineProperty(trigger, 'getClientRects', {
-        value: () => [new DOMRect(0, 0, 10, 10)],
-        configurable: true,
-      }),
-    );
+    row
+      .querySelectorAll('[data-slot="tooltip-trigger"]:not([aria-haspopup="menu"])')
+      .forEach((trigger) =>
+        Object.defineProperty(trigger, 'getClientRects', {
+          value: () => [new DOMRect(0, 0, 10, 10)],
+          configurable: true,
+        }),
+      );
   };
 
   /*

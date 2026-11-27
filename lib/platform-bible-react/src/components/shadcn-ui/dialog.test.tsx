@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
-import { describe, it, expect } from 'vitest';
+import { beforeAll, describe, it, expect } from 'vitest';
 import type { ComponentProps } from 'react';
-import { render } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import {
   Dialog,
@@ -15,6 +16,12 @@ import {
   Z_INDEX_NESTED_MODAL,
   Z_INDEX_NESTED_MODAL_BACKDROP,
 } from '@/components/z-index';
+import { installNoopResizeObserver } from '@/test-utils/resize-observer.util';
+
+// Radix positions an open tooltip with a ResizeObserver, which jsdom lacks
+beforeAll(() => {
+  installNoopResizeObserver();
+});
 
 /**
  * `DialogOverlay` sets its `zIndex` inline, and inline styles beat classes — so `overlayClassName`
@@ -62,5 +69,40 @@ describe('DialogContent overlay styling', () => {
     expect(document.querySelector<HTMLElement>('[data-slot="dialog-content"]')?.style.zIndex).toBe(
       String(Z_INDEX_MODAL),
     );
+  });
+});
+
+describe('DialogContent close button', () => {
+  const renderDialog = (props: ComponentProps<typeof DialogContent> = {}) =>
+    render(
+      <Dialog open>
+        <DialogContent {...props}>
+          <DialogTitle>Title</DialogTitle>
+          <DialogDescription>Description</DialogDescription>
+          <button type="button">Action</button>
+        </DialogContent>
+      </Dialog>,
+    );
+
+  it('shows its label as a hover tooltip', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    renderDialog();
+
+    await user.hover(screen.getByRole('button', { name: 'Close' }));
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Close');
+  });
+
+  it('uses closeButtonLabel as its accessible name and tooltip', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    renderDialog({ closeButtonLabel: 'Cerrar' });
+
+    await user.hover(screen.getByRole('button', { name: 'Cerrar' }));
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Cerrar');
+  });
+
+  it('falls back to English while closeButtonLabel is an unresolved localize key', () => {
+    renderDialog({ closeButtonLabel: '%dialog_close%' });
+
+    expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument();
   });
 });

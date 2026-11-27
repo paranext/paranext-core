@@ -3,6 +3,12 @@ import { SelectMenuItemHandler } from '@/components/advanced/menus/platform-menu
 import { TabToolbar } from '@/components/advanced/tab-toolbar/tab-toolbar.component';
 import { BlockFormatDropDown } from '@/components/demo/scripture-editor/BlockFormatDropDown';
 import { Button } from '@/components/shadcn-ui/button';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/shadcn-ui/tooltip';
 import { EditorRef } from '@eten-tech-foundation/platform-editor';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { Redo, Undo } from 'lucide-react';
@@ -135,29 +141,37 @@ export function PlatformToolbar({
             <BookChapterControl scrRef={scrRef} handleSubmit={onScrRefChange} />
           </div>
           {!isReadonly && (
-            <>
-              <Button
-                aria-label="Undo"
-                title="Undo"
-                variant="ghost"
-                size="icon"
-                onClick={() => editorRef.current?.undo()}
-                disabled={!canUndo}
-              >
-                <Undo />
-              </Button>
-              <Button
-                aria-label="Redo"
-                title="Redo"
-                variant="ghost"
-                size="icon"
-                onClick={() => editorRef.current?.redo()}
-                disabled={!canRedo}
-              >
-                <Redo />
-              </Button>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    aria-label="Undo"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => editorRef.current?.undo()}
+                    disabled={!canUndo}
+                  >
+                    <Undo />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Undo</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    aria-label="Redo"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => editorRef.current?.redo()}
+                    disabled={!canRedo}
+                  >
+                    <Redo />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Redo</TooltipContent>
+              </Tooltip>
               <BlockFormatDropDown editorRef={editorRef} blockMarker={blockMarker} />
-            </>
+            </TooltipProvider>
           )}
         </>
       }

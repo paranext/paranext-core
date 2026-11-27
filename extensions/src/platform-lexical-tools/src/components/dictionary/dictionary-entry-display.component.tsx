@@ -8,6 +8,10 @@ import {
   ToggleGroup,
   ToggleGroupItem,
   ListboxOption,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
 } from 'platform-bible-react';
 import { ChevronUpIcon } from 'lucide-react';
 import { Entry, Sense } from 'platform-lexical-tools';
@@ -387,14 +391,24 @@ export function DictionaryEntryDisplay({
             </p>
           </div>
         )}
-        <Button
-          variant="secondary"
-          size="icon"
-          className="tw:fixed tw:bottom-4 tw:right-4 tw:z-20"
-          onClick={onClickScrollToTop}
-        >
-          <ChevronUpIcon />
-        </Button>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="secondary"
+                size="icon"
+                className="tw:fixed tw:bottom-4 tw:right-4 tw:z-20"
+                onClick={onClickScrollToTop}
+                aria-label={localizedStrings['%platformLexicalTools_dictionary_scrollToTop%']}
+              >
+                <ChevronUpIcon />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              {localizedStrings['%platformLexicalTools_dictionary_scrollToTop%']}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </div>
     </>
   );

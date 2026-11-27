@@ -1,5 +1,12 @@
 import { ArrowLeft, Maximize2 } from 'lucide-react';
-import { Badge, Button } from 'platform-bible-react';
+import {
+  Badge,
+  Button,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from 'platform-bible-react';
 import type { LocalizedStringValue } from 'platform-bible-utils';
 import type { MediaEntryRowData } from './media-entry-row.component';
 
@@ -84,16 +91,23 @@ export function MediaItemDetail({
             alt={thumbnailLabel}
             className="tw:h-full tw:w-full tw:rounded tw:object-contain"
           />
-          <Button
-            type="button"
-            variant="secondary"
-            size="icon"
-            onClick={onMaximize}
-            aria-label={maximizeLabel}
-            className="tw:absolute tw:right-2 tw:top-2 tw:h-8 tw:w-8 tw:bg-background/80 tw:shadow"
-          >
-            <Maximize2 className="tw:h-4 tw:w-4" aria-hidden="true" />
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="icon"
+                  onClick={onMaximize}
+                  aria-label={maximizeLabel}
+                  className="tw:absolute tw:right-2 tw:top-2 tw:h-8 tw:w-8 tw:bg-background/80 tw:shadow"
+                >
+                  <Maximize2 className="tw:h-4 tw:w-4" aria-hidden="true" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{maximizeLabel}</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
       )}
       {item.referenceLabel && (

@@ -361,6 +361,12 @@
     "%enhancedResources_semanticDomain_description%": {
       "notes": "Screen-reader description for the SemanticDomainViewer drawer. Announces the drawer's purpose."
     },
+    "%enhancedResources_semanticDomain_collapse%": {
+      "notes": "Accessible name and tooltip of the chevron button that collapses a domain in the SemanticDomainViewer's domain tree."
+    },
+    "%enhancedResources_semanticDomain_expand%": {
+      "notes": "Accessible name and tooltip of the chevron button that expands a domain in the SemanticDomainViewer's domain tree."
+    },
     "%enhancedResources_marbleGuide_title%": {
       "notes": "Title of the 'Getting started in Enhanced Resources' guide dialog. Mirrors PT9 string MarbleGuideForm_1."
     },
@@ -593,6 +599,8 @@
       "%enhancedResources_articleViewer_title%": "Article",
       "%enhancedResources_semanticDomain_title%": "Semantic domains",
       "%enhancedResources_semanticDomain_description%": "Browse the semantic-domain hierarchy and the dictionary entries that belong to the focused domain.",
+      "%enhancedResources_semanticDomain_collapse%": "Collapse",
+      "%enhancedResources_semanticDomain_expand%": "Expand",
       "%enhancedResources_marbleGuide_title%": "Getting started in enhanced resources",
       "%enhancedResources_marbleGuide_description%": "Tutorial explaining word highlighting colors, research tab icons, and basic navigation in enhanced resources.",
       "%enhancedResources_marbleGuide_overview%": "An enhanced resource is a resource text in which many words and phrases have been linked, word-by-word, to the original Hebrew and Greek texts. These words and phrases have research material linked to them.",
@@ -632,7 +640,9 @@
       "%enhancedResources_ribbon_updateAvailable_downloadDisabled%": "Descargar ahora (deshabilitado)",
       "%enhancedResources_ribbon_imageWarning_title%": "Solo imagenes en miniatura",
       "%enhancedResources_ribbon_imageWarning_description%": "Solo las imagenes en miniatura estan instaladas. La descarga de imagenes estara disponible en una version futura.",
-      "%enhancedResources_footnotesPane_zoomAreaLabel%": "Notas al pie"
+      "%enhancedResources_footnotesPane_zoomAreaLabel%": "Notas al pie",
+      "%enhancedResources_semanticDomain_collapse%": "Contraer",
+      "%enhancedResources_semanticDomain_expand%": "Expandir"
     }
   }
 }

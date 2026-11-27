@@ -258,6 +258,7 @@ export const MANAGE_BOOKS_DIALOG_STRING_KEYS = Object.freeze([
   '%manageBooks_filter_clearButton%',
   // Filter bar
   '%manageBooks_filter_placeholder%',
+  '%general_clearSearch%',
   '%manageBooks_filter_books%',
   '%manageBooks_genericError%',
   '%manageBooks_projectSelector_versificationSectionHeading%',

@@ -25,6 +25,10 @@ export type ErDictionaryFilteredListProps<T extends IndexedListItem> = {
   onDomainChange: (newPath: SemanticDomain[]) => void;
   /** Callback for the close (X) button. When provided, renders a close button on the right. */
   onClose?: () => void;
+  /** Localized accessible name and tooltip for a tree node's toggle while the node is collapsed */
+  expandLabel: string;
+  /** Localized accessible name and tooltip for a tree node's toggle while the node is expanded */
+  collapseLabel: string;
   /** Additional CSS class names */
   className?: string;
 };

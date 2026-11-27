@@ -46,6 +46,7 @@ export const RESOURCE_PICKER_DIALOG_STRING_KEYS = Object.freeze([
   '%resourcePicker_section_available_to_download%',
   '%resourcePicker_no_results%',
   '%resourcePicker_search_placeholder%',
+  '%general_clearSearch%',
   '%resourcePicker_language_filter_any%',
   '%resourcePicker_language_filter_multipleSelected%',
   '%resourcePicker_language_filter_search_placeholder%',
@@ -728,6 +729,7 @@ export default function ResourcePickerDialog({
           value={searchText}
           onSearch={setSearchText}
           placeholder={searchPlaceholder}
+          clearButtonLabel={localizeString(localizedStrings, '%general_clearSearch%')}
           isFullWidth
           isDisabled={areFiltersInert}
         />

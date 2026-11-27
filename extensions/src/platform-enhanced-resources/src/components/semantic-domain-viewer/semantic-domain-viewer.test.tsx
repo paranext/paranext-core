@@ -298,3 +298,32 @@ describe('SemanticDomainViewer', () => {
   //   3. Live ARIA + keyboard verification recorded in
   //      `audit-evidence/2026-05-16-stabilization/fn-005-evidence.md`.
 });
+
+describe('SemanticDomainViewer tree toggle labels', () => {
+  it('names a nested node toggle with the localized expand/collapse label for its state', () => {
+    renderSdv({
+      localizedStringsWithLoadingState: [
+        {
+          '%enhancedResources_semanticDomain_expand%': 'Expandir',
+          '%enhancedResources_semanticDomain_collapse%': 'Contraer',
+        },
+        false,
+      ],
+    });
+    const tree = openSegmentDropdown('5.1 Speak');
+    const speak = findTreeItemByLabel(tree, '5.1 Speak');
+    if (!speak) throw new Error('Expected the "5.1 Speak" treeitem');
+    const toggle = getRowButton(speak);
+    const labelBefore = toggle.getAttribute('aria-label');
+    const expandedBefore = speak.getAttribute('aria-expanded') === 'true';
+    expect(labelBefore).toBe(expandedBefore ? 'Contraer' : 'Expandir');
+
+    act(() => {
+      fireEvent.click(toggle);
+    });
+
+    expect(getRowButton(speak).getAttribute('aria-label')).toBe(
+      expandedBefore ? 'Expandir' : 'Contraer',
+    );
+  });
+});

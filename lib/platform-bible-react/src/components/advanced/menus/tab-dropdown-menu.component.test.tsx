@@ -1239,3 +1239,32 @@ describe('TabDropdownMenu dynamic item states', () => {
     expect(document.querySelectorAll('[data-slot="menu-icon-spacer"]')).toHaveLength(0);
   });
 });
+
+describe('TabDropdownMenu trigger tooltip', () => {
+  it('shows the tab label as a hover tooltip on the trigger', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <TabDropdownMenu menuData={SUBMENU_MENU} onSelectMenuItem={vi.fn()} tabLabel="Project" />,
+    );
+
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+    await user.hover(screen.getByRole('button', { name: 'Project' }));
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Project');
+  });
+
+  it('shows the tab label as a hover tooltip on the trigger of a menu opened in the overlay', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <TabDropdownMenu
+        menuData={SUBMENU_MENU}
+        onSelectMenuItem={vi.fn()}
+        tabLabel="Project"
+        openMenuInOverlay={async () => undefined}
+      />,
+    );
+
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+    await user.hover(screen.getByRole('button', { name: 'Project' }));
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Project');
+  });
+});

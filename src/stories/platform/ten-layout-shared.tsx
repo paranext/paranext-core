@@ -47,6 +47,10 @@ import {
   SelectValue,
   TabToolbar,
   Toolbar,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
 } from 'platform-bible-react';
 import {
   defaultScrRef,
@@ -141,11 +145,35 @@ const draggableGroupOptions: TabGroup = {
   moreIcon: createElement(ChevronsUpDown),
 };
 
+/** Icon-only button for these mock layouts, with its label as both accessible name and tooltip */
+function LabeledIconButton({
+  label,
+  className = 'tw:size-7',
+  children,
+}: {
+  label: string;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button variant="ghost" size="icon" className={className} aria-label={label}>
+            {children}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>{label}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
 function PlusButton() {
   return (
-    <Button variant="ghost" size="icon" className="tw:size-7">
+    <LabeledIconButton label="New tab">
       <Plus />
-    </Button>
+    </LabeledIconButton>
   );
 }
 
@@ -233,12 +261,8 @@ function IconTab({ children }: { children: ReactNode }) {
   );
 }
 
-function ToolbarIconButton({ children }: { children: ReactNode }) {
-  return (
-    <Button variant="ghost" size="icon" className="tw:size-7">
-      {children}
-    </Button>
-  );
+function ToolbarIconButton({ label, children }: { label: string; children: ReactNode }) {
+  return <LabeledIconButton label={label}>{children}</LabeledIconButton>;
 }
 
 function PillButton({ children }: { children: ReactNode }) {
@@ -411,9 +435,9 @@ function ResourceColumn({
     <div className="last:tw:border-e-0 tw:flex tw:min-w-0 tw:flex-1 tw:flex-col tw:gap-2 tw:border-e tw:border-border tw:p-3">
       <div className="tw:flex tw:items-center tw:justify-between">
         <span className="tw:text-sm tw:font-semibold">{title}</span>
-        <Button variant="ghost" size="icon" className="tw:size-6">
+        <LabeledIconButton label="More options" className="tw:size-6">
           ⋮
-        </Button>
+        </LabeledIconButton>
       </div>
       {description ? (
         <div className="tw:text-xs tw:text-muted-foreground">{description}</div>
@@ -556,14 +580,14 @@ function GnbScripturePanel() {
     <div className="tw:flex tw:h-full tw:flex-col">
       <PanelHeader title="Good News Bible (GNB)" />
       <EditorToolbar>
-        <ToolbarIconButton>
+        <ToolbarIconButton label="Undo">
           <Undo2 className="tw:size-4" />
         </ToolbarIconButton>
-        <ToolbarIconButton>
+        <ToolbarIconButton label="Redo">
           <Redo2 className="tw:size-4" />
         </ToolbarIconButton>
         <div className="tw:flex-1" />
-        <ToolbarIconButton>
+        <ToolbarIconButton label="Protect">
           <Shield className="tw:size-4" />
         </ToolbarIconButton>
       </EditorToolbar>
@@ -704,7 +728,7 @@ function TextCollectionTabContent() {
         trailing={
           <>
             <span className="tw:text-xs tw:text-muted-foreground">John 1:1</span>
-            <ToolbarIconButton>
+            <ToolbarIconButton label="Edit">
               <PenLine className="tw:size-4" />
             </ToolbarIconButton>
           </>
@@ -1231,9 +1255,9 @@ function PowerChromeBar() {
       <span className="tw:px-2">Paratext</span>
       <span className="tw:px-2">Help</span>
       <div className="tw:flex tw:flex-1 tw:items-center tw:justify-center tw:gap-2">
-        <Button variant="ghost" size="icon" className="tw:size-7">
+        <LabeledIconButton label="Home">
           <Home className="tw:size-4" />
-        </Button>
+        </LabeledIconButton>
         <Button
           variant="outline"
           size="sm"
@@ -1246,15 +1270,15 @@ function PowerChromeBar() {
         </Button>
       </div>
       <div className="tw:flex tw:items-center tw:gap-1">
-        <Button variant="ghost" size="icon" className="tw:size-7">
+        <LabeledIconButton label="Dark mode">
           <Moon className="tw:size-4" />
-        </Button>
-        <Button variant="ghost" size="icon" className="tw:size-7">
+        </LabeledIconButton>
+        <LabeledIconButton label="Network">
           <Network className="tw:size-4" />
-        </Button>
-        <Button variant="ghost" size="icon" className="tw:size-7">
+        </LabeledIconButton>
+        <LabeledIconButton label="Account">
           <User className="tw:size-4" />
-        </Button>
+        </LabeledIconButton>
         <span className="tw:ms-2 tw:px-1 tw:text-muted-foreground">_</span>
         <span className="tw:px-1 tw:text-muted-foreground">▢</span>
         <span className="tw:px-1 tw:text-muted-foreground">✕</span>
@@ -1281,14 +1305,14 @@ function SimpleChromeBar() {
         <Button variant="ghost" size="sm" className="tw:h-7 tw:rounded-md tw:px-3 tw:text-xs">
           John 1 ▾
         </Button>
-        <Button variant="ghost" size="icon" className="tw:size-7">
+        <LabeledIconButton label="Back">
           <ArrowLeft className="tw:size-4" />
-        </Button>
+        </LabeledIconButton>
       </div>
       <div className="tw:flex tw:items-center tw:gap-2">
-        <Button variant="ghost" size="icon" className="tw:size-7">
+        <LabeledIconButton label="Add">
           <Plus className="tw:size-4" />
-        </Button>
+        </LabeledIconButton>
         <div className="tw:flex tw:items-center tw:gap-1">
           <ColorChip className="tw:bg-muted-foreground/40" />
           <ColorChip className="tw:bg-muted-foreground/30" />
@@ -1752,9 +1776,9 @@ function PowerInteractiveChromeBar() {
       }
       configAreaChildren={
         <>
-          <Button variant="ghost" size="icon" className="tw:size-7">
+          <LabeledIconButton label="Home">
             <Home className="tw:size-4" />
-          </Button>
+          </LabeledIconButton>
           <BookChapterControl scrRef={scrRef} handleSubmit={setScrRef} />
           <ScrollGroupSelector
             availableScrollGroupIds={[undefined, 0, 1, 2, 3, 4]}
@@ -1763,15 +1787,15 @@ function PowerInteractiveChromeBar() {
             onChangeScrollGroupId={setScrollGroupId}
             size="sm"
           />
-          <Button variant="ghost" size="icon" className="tw:size-7">
+          <LabeledIconButton label="Dark mode">
             <Moon className="tw:size-4" />
-          </Button>
-          <Button variant="ghost" size="icon" className="tw:size-7">
+          </LabeledIconButton>
+          <LabeledIconButton label="Network">
             <Network className="tw:size-4" />
-          </Button>
-          <Button variant="ghost" size="icon" className="tw:size-7">
+          </LabeledIconButton>
+          <LabeledIconButton label="Account">
             <User className="tw:size-4" />
-          </Button>
+          </LabeledIconButton>
         </>
       }
     />

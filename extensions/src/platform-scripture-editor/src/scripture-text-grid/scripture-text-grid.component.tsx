@@ -1,6 +1,15 @@
 import { logger } from '@papi/frontend';
 import { SerializedVerseRef } from '@sillsdev/scripture';
-import { Button, ResizableHandle, ResizablePanel, ResizablePanelGroup } from 'platform-bible-react';
+import {
+  Button,
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from 'platform-bible-react';
 import { formatReplacementString, formatScrRef, MODIFIER_KEYS } from 'platform-bible-utils';
 import { X } from 'lucide-react';
 import {
@@ -735,14 +744,21 @@ export function ScriptureTextGrid({
                 className="tw:flex tw:h-full tw:min-h-0 tw:flex-col"
               >
                 <div className="tw:flex tw:items-center tw:justify-end tw:border-b tw:px-1 tw:py-0.5">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label={closeChapterContextLabel}
-                    onClick={onChapterContextClose}
-                  >
-                    <X className="tw:h-4 tw:w-4" />
-                  </Button>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label={closeChapterContextLabel}
+                          onClick={onChapterContextClose}
+                        >
+                          <X className="tw:h-4 tw:w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>{closeChapterContextLabel}</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 </div>
                 <div className="tw:flex tw:min-h-0 tw:flex-1">
                   <ResourceCell

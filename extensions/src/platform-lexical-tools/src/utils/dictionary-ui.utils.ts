@@ -34,6 +34,7 @@ export function useScopeReference(
 export const DICTIONARY_LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   ...ERROR_POPOVER_STRING_KEYS,
   DICTIONARY_TITLE_KEY,
+  '%general_clearSearch%',
   '%platformLexicalTools_dictionary_allOccurrencesLabel%',
   '%platformLexicalTools_dictionary_backToList%',
   '%platformLexicalTools_dictionary_definitionLabel%',
@@ -54,6 +55,7 @@ export const DICTIONARY_LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%platformLexicalTools_dictionary_scopeSelector_verse%',
   '%platformLexicalTools_dictionary_sdbgCopyright%',
   '%platformLexicalTools_dictionary_sdbhCopyright%',
+  '%platformLexicalTools_dictionary_scrollToTop%',
   '%platformLexicalTools_dictionary_strongsCodeLabel%',
   '%platformLexicalTools_dictionary_trackProjectDropdownLabel%',
   '%platformLexicalTools_dictionary_dataLoadError%',
