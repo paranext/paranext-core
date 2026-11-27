@@ -30,6 +30,7 @@ last_updated: 2026-06-18
 | Progress/Loading | Progress, Spinner, Skeleton | (common pattern) |
 | Modal alert/confirm | `papi.dialogs.showDialog('platform.alert', …)` | `hello-rock3` |
 | Dialogs/Modals | Dialog, Drawer, Popover | (common pattern) |
+| Multi-step flow (setup, guided creation) | **Wizard** (`platform-bible-react/experimental`; keeps a constant height across steps) | `lib/platform-bible-react/src/components/basics/wizard/wizard.stories.tsx` |
 
 ## Component Decision Tree
 
@@ -80,6 +81,7 @@ last_updated: 2026-06-18
 - Toolbar actions? → **Toolbar** or **TabToolbar**
 - Switching between views (e.g., list/grid)? → **ButtonGroup**
 - Breadcrumb trail? → **Breadcrumb** *(not yet existing)*
+- Ordered multi-step task? → **Wizard** (never let its height change between steps — see the Wizards section of the `Guidelines/Component Choices` Storybook page)
 
 ### Toggles
 - Single toggle button? → **Toggle**

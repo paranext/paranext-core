@@ -2056,6 +2056,95 @@ export type DeveloperSectionProps = {
 /** @experimental This export is unstable and may change shape or disappear without notice */
 export declare function DeveloperSection({ localizedStrings, selectedServer, onServerChange, disabled, }: DeveloperSectionProps): import("react/jsx-runtime").JSX.Element;
 /**
+ * Object containing all keys used for localization in this component. If you're using this
+ * component in an extension, you can pass it into the useLocalizedStrings hook to easily obtain the
+ * localized strings and pass them into the localizedStrings prop of this component.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare const WIZARD_STRING_KEYS: readonly [
+	"%wizard_button_back%",
+	"%wizard_button_next%",
+	"%wizard_button_finish%",
+	"%wizard_stepIndicator%",
+	"%general_cancel%"
+];
+/** @experimental This export is unstable and may change shape or disappear without notice */
+export type WizardLocalizedStrings = {
+	[key in (typeof WIZARD_STRING_KEYS)[number]]?: string;
+};
+/**
+ * One step of a {@link Wizard}.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export interface WizardStep {
+	/** Stable identifier for the step, used as its React key and in `data-step-id`. */
+	id: string;
+	/** Step heading, rendered as an `<h2>` at the top of the step. */
+	title: React$1.ReactNode;
+	/**
+	 * Step body. Every step's content stays mounted for the life of the wizard (see {@link Wizard}),
+	 * so form state inside a step survives navigating away and back.
+	 */
+	content: React$1.ReactNode;
+	/**
+	 * Whether the user may move on from this step (Next, or Finish on the last step). Use it to gate
+	 * on validation the step's content owns. Defaults to `true`.
+	 */
+	canAdvance?: boolean;
+}
+/** @experimental This export is unstable and may change shape or disappear without notice */
+export interface WizardProps {
+	/** The steps, in order. Must contain at least one step. */
+	steps: WizardStep[];
+	/** Optional wizard title, rendered as an `<h1>` above the step indicator. */
+	title?: React$1.ReactNode;
+	/** 0-based index of the step to open on. Read on mount only. Defaults to `0`. */
+	initialStepIndex?: number;
+	/** Called with the new 0-based step index whenever the user moves to another step. */
+	onStepChange?: (stepIndex: number) => void;
+	/** Called when the user presses Finish on the last step. */
+	onFinish: () => void;
+	/** When provided, a Cancel button is shown in the footer and calls this when pressed. */
+	onCancel?: () => void;
+	/**
+	 * While `true`, every footer button is disabled and Finish shows a spinner. Set it while the work
+	 * started by `onFinish` is in flight.
+	 */
+	isBusy?: boolean;
+	/**
+	 * BCP 47 locale tag for the numerals in the stepper and the "Step X of N" text. Defaults to
+	 * `'en'`.
+	 */
+	locale?: string;
+	/**
+	 * Localized strings for the buttons and the step indicator; resolve them from
+	 * {@link WIZARD_STRING_KEYS}. Unresolved entries fall back to English.
+	 */
+	localizedStrings?: WizardLocalizedStrings;
+	/** Additional class names for the wizard's root element. */
+	className?: string;
+}
+/**
+ * A multi-step wizard: an optional title, a "Step X of N" indicator, a {@link WizardStepper}, the
+ * current step's heading and content, and a footer with Back, Cancel and Next / Finish.
+ *
+ * The wizard keeps a constant height (and width) across steps, so the footer buttons never move
+ * under the user's pointer and the surrounding layout does not jump. It does this by rendering
+ * every step into the same CSS grid cell: the cell sizes itself to the largest step, and the steps
+ * that are not current are `visibility: hidden`, `inert` and `aria-hidden`, so they take up space
+ * but cannot be seen, focused, clicked or read by assistive technology. This needs no measuring, so
+ * it also holds when a step's content changes size after mount (e.g. a font loads or the locale
+ * changes). The cost is that every step's content is mounted from the start.
+ *
+ * Navigation is local: Next moves forward when the current step's `canAdvance` is not `false`, Back
+ * moves to the previous step, and Finish (Next on the last step) calls `onFinish`.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare function Wizard({ steps, title, initialStepIndex, onStepChange, onFinish, onCancel, isBusy, locale, localizedStrings, className, }: WizardProps): import("react/jsx-runtime").JSX.Element | undefined;
+/**
  * Props for {@link ShortcutKeys}.
  *
  * @experimental This type is unstable and may change or disappear without notice

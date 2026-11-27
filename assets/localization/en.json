@@ -774,5 +774,9 @@
   "%window_error_crashed_reloadButton%": "Reload",
   "%window_error_crashed_title%": "This window stopped working",
   "%window_label_empty%": "Empty window",
+  "%wizard_button_back%": "Back",
+  "%wizard_button_finish%": "Finish",
+  "%wizard_button_next%": "Next",
+  "%wizard_stepIndicator%": "Step {stepNumber} of {stepCount}",
   "%wordList%": "Word List"
 }
