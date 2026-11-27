@@ -58,6 +58,17 @@
   overflow-wrap: anywhere; // Let long version numbers wrap
 }
 
+// The color is set explicitly because this tab is outside any `.pr-twp` scope, so a bare `<a>` would
+// get the browser's default link blue, which is unreadable in dark mode. Underlined at rest because
+// the Platform themes give `--primary` the same (or nearly the same) value as `--foreground`, so
+// color alone does not mark these as links. This rule is unlayered so it beats both the global
+// `a { text-decoration: none }` and Tailwind's layered utilities.
+.about-link {
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
 .about-license-error {
   color: var(--destructive); // Only rendered when the Terms of Service could not be opened
   font-size: 0.875em;

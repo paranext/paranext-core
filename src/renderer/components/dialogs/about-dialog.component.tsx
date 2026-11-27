@@ -120,7 +120,7 @@ function AboutDialog() {
     <>
       <Button
         variant="link"
-        className="tw:h-auto tw:p-0"
+        className="about-link tw:h-auto tw:p-0"
         onClick={openTermsOfService}
         aria-describedby={opensTermsOfServiceId}
       >
@@ -165,13 +165,18 @@ function AboutDialog() {
           {formatReplacementStringToArray(dbIpAttributionFormat, {
             intro: dbIpAttributionIntro,
             websiteLink: (
-              <a target="_blank" rel="noreferrer" href={DB_IP_WEBSITE_LINK}>
+              <a className="about-link" target="_blank" rel="noreferrer" href={DB_IP_WEBSITE_LINK}>
                 {DB_IP_WEBSITE_NAME}
               </a>
             ),
             license: DB_IP_LICENSE,
             terms: (
-              <a target="_blank" rel="noreferrer" href={DB_IP_ATTRIBUTION_LINK}>
+              <a
+                className="about-link"
+                target="_blank"
+                rel="noreferrer"
+                href={DB_IP_ATTRIBUTION_LINK}
+              >
                 {dbIpAttributionTerms}
               </a>
             ),
