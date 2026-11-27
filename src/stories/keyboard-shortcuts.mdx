@@ -25,6 +25,11 @@ The catalog's data lives in `src/shared/data/keyboard-shortcuts.data.ts`. Whenev
 or remove a keyboard handler anywhere in the app, update the matching entry there in the same change
 (see `.claude/rules/keyboard-shortcuts-catalog.md`).
 
+The catalog documents only the specific shortcuts that matter in Paratext: chords with a modifier,
+function keys, and special keys with a Paratext meaning (such as `\` to open the markers menu). It
+does not document standard single keys — Enter, Space, the arrow keys, Tab, Escape — or "any
+character key" (type-to-search). Ask: would other apps document this as a shortcut?
+
 ## Conventions
 
 When displaying a keyboard shortcut in the UI, write it the way the user's operating system writes it. Each OS has its own established convention for naming and combining modifier and special keys, and users recognize their own platform's convention at a glance. Mixing conventions — or inventing a new one — makes shortcuts harder to scan and signals that the app isn't paying attention.
@@ -122,9 +127,8 @@ A shortcut the application defines should nearly always be discoverable where th
 action it runs: as the **shortcut hint on its menu item** (give the catalog entry a `command`; the
 menu then shows the chord as keycaps), or in the **tooltip of the control it triggers** (see
 [Keyboard shortcuts in tooltips](https://paranext.github.io/paranext-core/platform-bible-react-storybook/?path=/docs/guidelines-tooltips--docs#keyboard-shortcuts-in-tooltips)).
-A shortcut that appears in neither place is one most users will never find. Widget navigation —
-arrow keys in a list, Escape to close — is the exception: users expect it without being told. In
-the catalog, an entry marked **Shown in menus** has a menu hint.
+A shortcut that appears in neither place is one most users will never find. In the catalog, an
+entry marked **Shown in menus** has a menu hint.
 
 ### Why this matters
 
@@ -146,9 +150,6 @@ which it is.
 - **Shown in menus** — the entry has a `command`, so menu items that run it show the chord as a
   hint. Other entries should be shown in the tooltip of the control they trigger (see
   [Make every shortcut discoverable](#make-every-shortcut-discoverable)).
-- **Widget navigation** — arrow, Home/End, Enter/Space and Escape handling that this repo
-  implements by hand for a custom list, grid, tree or table. It is kept in its own category so the
-  named shortcuts stay easy to scan.
 
 <KeyboardShortcutsCatalog
   entries={rootKeyboardShortcuts}
@@ -158,12 +159,10 @@ which it is.
 
 ## Not catalogued
 
-The catalog lists named application shortcuts, plus the hand-rolled widget navigation in its own
-category. A repo-wide audit also surfaced keyboard handling that is **deliberately excluded**
-because it is a library or browser default — arrow keys in a Radix menu or cmdk list, Enter/Space
-activating a focused button, Escape closing a Radix dialog or popover, Tab moving focus — or
-because it binds no key of its own. These follow normal accessibility conventions and are not
-tracked here.
+Standard keys for activating, moving, dismissing and typing — Enter, Space, the arrow keys, Home/End,
+Tab, Escape, and "any character key" — are not catalogued, whether a library or this repo's own code
+handles them, and neither are handlers that bind no key of their own (ones that only stop, observe
+or track keys).
 
 **Electron, OS and browser defaults are not catalogued** — including the accelerators Electron gives
 the macOS menu bar's bare menu roles (Quit, Hide, Close, Minimize, Reload, Edit menu, Full Screen);
@@ -172,38 +171,9 @@ only menu items whose accelerator the app sets itself (the View menu's content-z
 A few specific handlers were reviewed and intentionally left out; they are noted here so they are not
 mistaken for omissions:
 
-- **Enter to run a search** — `extensions/src/platform-scripture/src/find/find.component.tsx` starts
-  the search when Enter is pressed in the focused Find box. This is standard "Enter submits the
-  focused input" behavior, not a named shortcut.
 - **`Ctrl`/`Cmd`+`B` to toggle the sidebar** — present but **commented out** in
   `lib/platform-bible-react/src/components/shadcn-ui/sidebar.tsx`, pending a UX decision. If it is
   ever enabled, add it to the catalog, with a conflict on `open-book-chapter-control`.
 - **Configurable reference submit keys** — `book-chapter-control.component.tsx` lets a caller pass a
   `submitKeys` prop (e.g. space or `-`) to submit the scripture reference in the navigation input.
   This is caller-configured input behavior rather than a fixed application shortcut.
-- **Escape to close the Book Chapter Control popover** — closing is Radix's `PopoverContent`
-  dismissable-layer default, with no application `Escape` key handler. The one application code path
-  is an `onEscapeKeyDown` in `book-chapter-control.component.tsx` that only ever *declines* the
-  default: in compact mode (after a quick-nav arrow) it keeps an Escape pressed with focus outside
-  the popover and its trigger from closing it. It binds no key of its own and adds no shortcut. This
-  is unlike the same component's arrow-key grid navigation, Enter/Space grid activation, and
-  Backspace back-navigation, which ARE hand-rolled and ARE catalogued above
-  (`book-chapter-control-move-grid-highlight`, `book-chapter-control-activate-grid-item`,
-  `book-chapter-control-back`) — those bypass cmdk's defaults and implement custom grid semantics,
-  while Escape is otherwise an unmodified library default with nothing to document.
-- **Enter/Space on a clickable row or card** — `results-card.component.tsx`, the resource picker's
-  rows (`resource-picker-dialog.component.tsx`) and each project option in
-  `project-picker.component.tsx` run their click action on Enter or Space, as a native button would.
-  A disabled resource-picker row swallows the same keys so Space does not scroll the list.
-- **Handlers that only stop or observe a key** — the navigation history buttons stop Enter, Space
-  and ↓ from reaching the Radix menu trigger around them so the button keeps its native activation
-  (`navigation-history-buttons.component.tsx`); recent searches stop every key from bubbling out of
-  their list (`recent-searches.component.tsx`); Find's filters record whether Tab or Escape closed
-  their popover, to decide where focus goes (`find-filters.component.tsx`); the tab dropdown menu
-  restores its focus ring on any key (`tab-dropdown-menu.component.tsx`).
-- **Any key hides a hover tooltip** — the paragraph marker tooltip
-  (`paragraph-marker-tooltip-overlay.component.tsx`) hides while the user types, until the mouse
-  moves again.
-- **Focus tracking** — every keydown in a window, and main's first `before-input-event` listener,
-  tell the window service to re-detect focus (`window.service-shard.ts`, `main.ts`), and
-  `focus.util.ts` tracks keyboard use for focus rings. None of these binds a key.

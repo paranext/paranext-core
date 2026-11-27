@@ -282,8 +282,9 @@ Components must support both text directions:
 Any keyboard handler you add, change or remove — a key listener, an `onKeyDown` prop, an accelerator
 the app sets itself, a `useHotkeys` binding — updates its entry in
 `src/shared/data/keyboard-shortcuts.data.ts` in the same change, including any conflict with another
-chord and the Paratext 9 comparison. Only shortcuts the app defines go in; Electron, OS and browser
-defaults do not. Make each shortcut discoverable through a menu entry or the tooltip of the control it
+chord and the Paratext 9 comparison. Only specific shortcuts the app defines go in — chords,
+function keys, special keys with a Paratext meaning; standard single keys (Enter, Space, the arrow
+keys, Tab, Escape), "any character key", and Electron, OS and browser defaults do not. Make each shortcut discoverable through a menu entry or the tooltip of the control it
 triggers. How to write a shortcut per OS and how to render it (`ShortcutKeys`) are on the core
 Storybook page `Reference/Keyboard shortcuts` (`src/stories/keyboard-shortcuts.mdx`). The rule:
 `.claude/rules/keyboard-shortcuts-catalog.md`.

@@ -29,7 +29,7 @@ Reviews a PR for accessibility gaps, performance anti-patterns, and UX consisten
 #### Accessibility
 - Interactive elements must have ARIA labels → **missing = warning**
 - All elements reachable via Tab, custom widgets support keyboard patterns → **missing = warning**
-- A keyboard handler added, changed or removed without its entry in `src/shared/data/keyboard-shortcuts.data.ts`, or a new chord that overlaps an existing one with no recorded conflict (see `.claude/rules/keyboard-shortcuts-catalog.md`) → **missing = warning**
+- A keyboard shortcut handler (not a standard single key like Enter, Space, an arrow, Tab or Escape) added, changed or removed without its entry in `src/shared/data/keyboard-shortcuts.data.ts`, or a new chord that overlaps an existing one with no recorded conflict (see `.claude/rules/keyboard-shortcuts-catalog.md`) → **missing = warning**
 - A shortcut shown in the UI not written the user's OS way, or not rendered with `ShortcutKeys` (see the core Storybook page `Reference/Keyboard shortcuts`, `src/stories/keyboard-shortcuts.mdx`) → **concern = suggestion**
 - Semantic HTML used appropriately → **improvement = suggestion**
 - Color contrast meets WCAG AA → **concern = suggestion**

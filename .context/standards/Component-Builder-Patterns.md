@@ -573,10 +573,7 @@ export function sortProjects(projects: ProjectInfo[]): ProjectInfo[] {
 - Use virtualization for lists > 100 items
 - Implement row selection with visual feedback
 - Handle column sorting and filtering
-- Support full keyboard navigation (arrow keys, Enter, Escape). Keyboard handling you implement by
-  hand goes in the keyboard shortcuts catalog (`src/shared/data/keyboard-shortcuts.data.ts`, its
-  `Widget navigation` category for list/grid/table keys); see
-  `.claude/rules/keyboard-shortcuts-catalog.md`
+- Support full keyboard navigation (arrow keys, Enter, Escape)
 - Manage focus correctly when rows are added/removed
 
 ### Form Components (Project Settings)

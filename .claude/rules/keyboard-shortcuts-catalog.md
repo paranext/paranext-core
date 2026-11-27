@@ -21,25 +21,28 @@ listener, an `onKeyDown`/`onKeyDownCapture` prop, an Electron accelerator the ap
 `before-input-event` branch, a Lexical `KEY_DOWN_COMMAND` handler, or a `react-hotkeys-hook`
 `useHotkeys` binding — add, update, or remove the matching `KeyboardShortcutEntry` in
 `src/shared/data/keyboard-shortcuts.data.ts` as part of the same change, no matter which part of the
-app (main process, extension, or component library) the handler lives in.
+app (main process, extension, or component library) the handler lives in — unless the handler only
+binds standard keys, which the catalog leaves out (see below).
 
 Keep each entry's `purpose`, `category`, `context`, per-OS `keys`, and `locations` (repo-relative
 file paths) accurate. Use the per-OS display conventions on the **Reference → Keyboard shortcuts**
 page (macOS symbols with no separator; Windows/Linux words joined with `+`).
 
-What belongs in the catalog — only shortcuts the application itself defines:
+What belongs in the catalog — only the specific shortcuts relevant in Paratext that the application
+itself defines. The test: **would other apps document this as a shortcut?**
 
-- Every named shortcut (a chord, function key, or single key that triggers an action) that app code
-  binds, including a menu item whose `accelerator` the app sets itself.
-- Hand-rolled widget navigation — arrow/Home/End/Enter/Space/Escape handling this repo implements
-  itself for a custom list, grid, tree or table — goes in the `Widget navigation` category.
+- Every chord with a modifier, function key, or special key with a Paratext meaning (such as `\` to
+  open the markers menu) that app code binds, including a menu item whose `accelerator` the app
+  sets itself.
+- Never standard single keys — Enter, Space, the arrow keys, Tab, Escape — or "any character key"
+  (type-to-search), even when this repo's own code handles them for a custom list, grid, tree,
+  table, form field or dialog. Users expect them without being told.
 - Electron, OS and browser defaults stay out — including the accelerators Electron supplies for a
   bare macOS menu `role` (Quit, Hide, Close, Reload, the Edit menu, Full Screen) — as do library
   defaults (Radix/cmdk arrow keys, a native button's Enter/Space, a Radix dialog's Escape) and
   handlers that bind no key of their own. Never add an entry from memory: cite the code that binds
-  it in `locations`; when you deliberately leave
-  one out, add a line to the page's **Not catalogued** section so it is not mistaken for an
-  omission.
+  it in `locations`. When you deliberately leave out a handler for anything other than a standard
+  key, add a line to the page's **Not catalogued** section so it is not mistaken for an omission.
 
 ### Make shortcuts discoverable
 
@@ -47,7 +50,7 @@ An app-defined shortcut should nearly always be discoverable: shown as the short
 menu item that runs the same action (set the entry's `command`; see below), or in the tooltip of
 the control it triggers (`Guidelines/Tooltips` → "Keyboard shortcuts in tooltips" in the
 `platform-bible-react` Storybook). When you add a shortcut, add one of the two in the same change,
-or say in the PR why neither fits. Hand-rolled widget navigation is exempt.
+or say in the PR why neither fits.
 
 ### Conflicts
 
