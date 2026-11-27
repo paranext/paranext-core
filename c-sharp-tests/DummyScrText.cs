@@ -121,6 +121,14 @@ namespace TestParanextDataProvider
             cachedDefaultStylesheet.Set(new ScrStylesheet(this));
         }
 
+        /// <summary>
+        /// Makes every later open of the file at <paramref name="relFilePath"/> throw an
+        /// <see cref="IOException"/>, as a locked or permission-denied file does on disk. The file
+        /// is still listed by the file manager.
+        /// </summary>
+        public void MakeFileUnreadable(string relFilePath) =>
+            ((InMemoryFileManager)FileManager).MakeUnreadable(relFilePath);
+
         protected override void Load(bool ignoreLoadErrors = false)
         {
             // Nothing to do
@@ -149,6 +157,7 @@ namespace TestParanextDataProvider
         {
             private static readonly Encoding s_utf8NoBOM = new UTF8Encoding(false);
             private readonly Dictionary<string, InMemoryFile> _fileSystem = new();
+            private readonly HashSet<string> _unreadablePaths = [];
 
             public InMemoryFileManager(ScrText scrText)
                 : base(scrText) { }
@@ -341,8 +350,12 @@ namespace TestParanextDataProvider
             {
                 if (!_fileSystem.TryGetValue(relFilePath, out InMemoryFile? file))
                     throw new FileNotFoundException("File could not be found: " + relFilePath);
+                if (_unreadablePaths.Contains(relFilePath))
+                    throw new IOException("File could not be opened: " + relFilePath);
                 return file.Data;
             }
+
+            public void MakeUnreadable(string relFilePath) => _unreadablePaths.Add(relFilePath);
             #endregion
 
             #region DummyStreamWriter class

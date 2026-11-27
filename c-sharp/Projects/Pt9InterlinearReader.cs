@@ -208,37 +208,24 @@ internal static class Pt9InterlinearReader
     ///
     /// The attributes are the same ones the parsed payload's <c>GlossLanguage</c> and <c>BookId</c>
     /// come from, so a caller reading the probe and a caller reading the data name the same book
-    /// the same way. Anything that goes wrong reading them - a malformed file, an unexpected root,
-    /// an absent attribute - answers null rather than throwing: the probe's contract is the hash,
-    /// and a file whose identity cannot be established is exactly one a caller most wants listed
-    /// rather than one that should fail the whole probe.
+    /// the same way. <see cref="FindPt9InterlinearFiles"/> already excludes well-formed files whose
+    /// root is not <c>InterlinearData</c> (<see cref="IsForeignPt9BookFile"/>), so a null identity
+    /// comes from a malformed file, an absent attribute, or a file replaced after the scan. Each
+    /// answers null rather than throwing: the probe's contract is the hash, and a file whose
+    /// identity cannot be established is exactly one a caller most wants listed rather than one
+    /// that should fail the whole probe.
     /// </summary>
     private static (string? GlossLanguage, string? BookId) ReadPt9BookIdentity(Stream stream)
     {
         try
         {
-            // Both readers leave the stream open; the caller owns it and hashes the same handle.
-            // UTF-8 with byte-order-mark detection matches how the payload parse decodes these
-            // files, so the probe and the payload name a book from identically decoded bytes.
-            using var textReader = new StreamReader(
-                stream,
-                Encoding.UTF8,
-                detectEncodingFromByteOrderMarks: true,
-                bufferSize: 1024,
-                leaveOpen: true
-            );
-            using var xmlReader = XmlReader.Create(
-                textReader,
-                new XmlReaderSettings
-                {
-                    DtdProcessing = DtdProcessing.Prohibit,
-                    CloseInput = false,
-                    MaxCharactersInDocument = Pt9IdentityScanCharLimit,
-                }
-            );
+            // The payload parse decodes these files the same way, so the probe and the payload
+            // read identical text.
+            using var xmlReader = CreatePt9RootElementReader(stream, DtdProcessing.Prohibit);
             // The root element only: the payload parse binds the root, so matching an
-            // InterlinearData at any other depth would name a different book. MoveToContent stops
-            // at the first content node, so a file with no such root costs nothing to reject.
+            // InterlinearData at any other depth would name a different book. The scan has
+            // already dropped files with another root; this check guards against a file replaced
+            // after the scan.
             if (
                 xmlReader.MoveToContent() != XmlNodeType.Element
                 || xmlReader.Name != "InterlinearData"
@@ -309,8 +296,6 @@ internal static class Pt9InterlinearReader
             using var reader = OpenPt9File(fileManager, relativePath);
             sizeCap.Add(reader.BaseStream.Length);
 
-            // The whole relative path is compared, so a same-named file inside an Interlinear_*
-            // directory stays a book file.
             switch (relativePath.ToLowerInvariant())
             {
                 case Pt9LexiconFileNameLower:
@@ -386,17 +371,99 @@ internal static class Pt9InterlinearReader
     }
 
     /// <summary>
-    /// Whether a project-relative path is a PT9 interlinear book file (one gloss language's
-    /// cluster data for one book), matched the way PT9 classifies one: the lowercased path starts
-    /// with <c>interlinear_</c> and the extension is <c>.xml</c>. Matching on lowercased text
-    /// keeps the scan case-insensitive on every filesystem.
+    /// Whether a project-relative path has the file name of a PT9 interlinear book file (one gloss
+    /// language's cluster data for one book). The lowercased file name must start with
+    /// <c>interlinear_</c> and end in <c>.xml</c>, matching the name PT9 writes:
+    /// <c>Interlinear_{lang}_{book}.xml</c> (<c>InterlinearDataFile.GetRelativePath</c> in
+    /// ParatextData/Interlinear/InterlinearData.cs).
+    ///
+    /// This is deliberately narrower than PT9's <c>ProjectFileClassifier</c>
+    /// (ParatextData/Repository/ProjectFileClassifier.cs). That classifier checks for an
+    /// <c>interlinear_</c> prefix on the whole relative path. Under its rule, any other XML a user
+    /// keeps inside an <c>Interlinear_*</c> directory (an exported wordlist, say) would be parsed
+    /// as a book file and fail the read.
+    ///
+    /// A matching name is necessary but not sufficient; see <see cref="IsForeignPt9BookFile"/>.
+    /// Matching on lowercased text keeps the scan case-insensitive on every filesystem.
     /// </summary>
-    private static bool IsPt9InterlinearBookFile(string relativePath)
+    private static bool HasPt9InterlinearBookFileName(string relativePath)
     {
-        string lowerPath = relativePath.ToLowerInvariant();
-        return lowerPath.StartsWith(Pt9InterlinearFilePrefixLower, StringComparison.Ordinal)
-            && Path.GetExtension(lowerPath) == ".xml";
+        string lowerName = Path.GetFileName(relativePath).ToLowerInvariant();
+        return lowerName.StartsWith(Pt9InterlinearFilePrefixLower, StringComparison.Ordinal)
+            && Path.GetExtension(lowerName) == ".xml";
     }
+
+    /// <summary>
+    /// Whether a file with a book file's name is really some other XML document. Only the root
+    /// element is read. The file is foreign when it is well-formed up to that element and the
+    /// element is not <c>InterlinearData</c>.
+    ///
+    /// Three kinds of file are not foreign: one that is malformed before or at its root, one whose
+    /// root is <c>InterlinearData</c>, and one that cannot be opened or read. All stay in the
+    /// scan. If such a file is corrupt or unreadable, the read that opens it reports that; the
+    /// scan does not hide it. The DTD is skipped rather than processed, so a root whose attributes
+    /// reference DTD-declared entities counts as malformed and stays in the scan; processing DTDs
+    /// to tell such a file apart is not worth it for an export that rare.
+    ///
+    /// An unreadable file must not fail the scan itself. A selected read scans every book before
+    /// narrowing to its selection, so a failure here would let a book outside the selection block
+    /// the books inside it. A concurrent Paratext save can cause such a failure: it replaces a
+    /// file by two renames, so an open can fail briefly.
+    /// </summary>
+    private static bool IsForeignPt9BookFile(ProjectFileManager fileManager, string relativePath)
+    {
+        try
+        {
+            using var reader = fileManager.OpenFileForByteRead(relativePath);
+            // Ignore, not Prohibit: a foreign document may lead with a DOCTYPE (an XHTML export,
+            // say), and only its root element matters here. Ignore skips the DTD without
+            // expanding entities. A DOCTYPE-led InterlinearData file is still rejected by the
+            // payload parse, which prohibits DTDs.
+            using var xmlReader = CreatePt9RootElementReader(
+                reader.BaseStream,
+                DtdProcessing.Ignore
+            );
+            return xmlReader.MoveToContent() == XmlNodeType.Element
+                && xmlReader.Name != "InterlinearData";
+        }
+        catch (Exception e)
+            when (e
+                    is XmlException
+                        or InvalidOperationException
+                        or IOException
+                        or UnauthorizedAccessException
+            )
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Creates an XML reader that probes the root element of an open PT9 interlinear file. It
+    /// decodes as UTF-8 with byte-order-mark detection, as the payload parse does, and handles a
+    /// DTD as <paramref name="dtdProcessing"/> says. It stops after
+    /// <see cref="Pt9IdentityScanCharLimit"/> characters. Disposing the reader neither closes nor
+    /// rewinds the stream; the caller owns both.
+    /// </summary>
+    private static XmlReader CreatePt9RootElementReader(
+        Stream stream,
+        DtdProcessing dtdProcessing
+    ) =>
+        XmlReader.Create(
+            new StreamReader(
+                stream,
+                Encoding.UTF8,
+                detectEncodingFromByteOrderMarks: true,
+                bufferSize: 1024,
+                leaveOpen: true
+            ),
+            new XmlReaderSettings
+            {
+                DtdProcessing = dtdProcessing,
+                CloseInput = true,
+                MaxCharactersInDocument = Pt9IdentityScanCharLimit,
+            }
+        );
 
     /// <summary>
     /// Throws when the file or directory at the project-relative path is a link (symlink or
@@ -510,14 +577,23 @@ internal static class Pt9InterlinearReader
     }
 
     /// <summary>
-    /// Enumerates the project-relative paths of the files the PT9 interlinear data payload
-    /// converts, with path separators normalized to forward slashes (a backslash inside a path is
-    /// a file-name character, never a separator), through the project's file manager: the lexicon,
-    /// the stored word analyses, and every interlinear book file, whether at the project root or
-    /// inside an <c>Interlinear_*</c> directory. All name matching is on lowercased text, so file
-    /// casing never hides data. Sorted ordinally for one deterministic order. Empty when the
-    /// project carries no interlinear data. A file or directory that is a link out of the project
-    /// throws rather than being served.
+    /// Enumerates, through the project's file manager, the files the PT9 interlinear data payload
+    /// converts: the lexicon, the stored word analyses, and every interlinear book file, whether
+    /// at the project root or inside an <c>Interlinear_*</c> directory. Each is returned as a
+    /// project-relative path with forward slashes as separators. A backslash inside a path is a
+    /// file-name character, never a separator.
+    ///
+    /// A book file is selected by its own file name (see
+    /// <see cref="HasPt9InterlinearBookFileName"/>), not by the directory it sits in. Other files
+    /// in an <c>Interlinear_*</c> directory are ignored. A file with a book file's name is also
+    /// ignored when its root element shows it is some other XML document (see
+    /// <see cref="IsForeignPt9BookFile"/>). The manifest and every data read take their files from
+    /// this scan, so they all ignore the same files.
+    ///
+    /// All name matching is on lowercased text, so file casing never hides data. The paths are
+    /// sorted ordinally for one deterministic order, and the list is empty when the project carries
+    /// no interlinear data. A file or directory that is a link out of the project throws rather
+    /// than being served.
     /// </summary>
     private static List<string> FindPt9InterlinearFiles(ScrText scrText)
     {
@@ -534,12 +610,13 @@ internal static class Pt9InterlinearReader
                 if (
                     lowerName == Pt9LexiconFileNameLower
                     || lowerName == Pt9WordAnalysesFileNameLower
-                    || IsPt9InterlinearBookFile(normalized)
                 )
                 {
                     EnsurePt9PathStaysInProject(projectDirectory, normalized);
                     filePaths.Add(normalized);
                 }
+                else if (HasPt9InterlinearBookFileName(normalized))
+                    AddBookFile(normalized);
             }
 
             foreach (var directory in fileManager.ProjectDirectories("*"))
@@ -556,11 +633,8 @@ internal static class Pt9InterlinearReader
                 foreach (var relativePath in fileManager.ProjectFiles("*", directory))
                 {
                     var normalized = relativePath.Replace(Path.DirectorySeparatorChar, '/');
-                    if (IsPt9InterlinearBookFile(normalized))
-                    {
-                        EnsurePt9PathStaysInProject(projectDirectory, normalized);
-                        filePaths.Add(normalized);
-                    }
+                    if (HasPt9InterlinearBookFileName(normalized))
+                        AddBookFile(normalized);
                 }
             }
         }
@@ -571,6 +645,21 @@ internal static class Pt9InterlinearReader
 
         filePaths.Sort(StringComparer.Ordinal);
         return filePaths;
+
+        void AddBookFile(string normalized)
+        {
+            // The link check runs first: probing the root opens the file.
+            EnsurePt9PathStaysInProject(projectDirectory, normalized);
+            if (IsForeignPt9BookFile(fileManager, normalized))
+            {
+                Console.WriteLine(
+                    $"Ignoring {DescribePathForMessage(normalized)} in project '{scrText.Name}': "
+                        + "its root element is not InterlinearData, so it is not a PT9 interlinear book file"
+                );
+                return;
+            }
+            filePaths.Add(normalized);
+        }
     }
 
     /// <summary>The typed error for one unreadable or unparseable PT9 interlinear file.</summary>
