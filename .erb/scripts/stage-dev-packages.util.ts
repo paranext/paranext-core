@@ -210,6 +210,17 @@ export function isEnvFlagEnabled(value: string | undefined): boolean {
 }
 
 /**
+ * The local branch `stage-dev-packages` keeps a dev repo checkout on when `revision` names a commit
+ * or a tag.
+ *
+ * A commit has no branch to be on, and leaving the checkout detached would make it look exactly
+ * like one a person parked on a commit to read it — which staging never moves. Sitting on a branch
+ * only this script creates is what lets the next run tell "where staging left this checkout" from
+ * "where somebody put it", with nothing recorded outside the checkout itself.
+ */
+export const PINNED_COMMIT_BRANCH = 'stage-dev-packages-pin';
+
+/**
  * Where `stage-dev-packages` records commits it moved aside, relative to the repository root.
  *
  * A file rather than a return value because the two halves run in different processes: staging is
@@ -251,6 +262,14 @@ export function formatRescuedCommitsBanner(rescues: RescuedCommit[]): string {
     lines.push(
       `  ${rescue.repoFolder}: ${rescue.commitCount} commit(s) on "${rescue.revision}" were not on`,
       '  the remote, so staging reset the branch past them. They are kept at:',
+    );
+    if (rescue.revision === PINNED_COMMIT_BRANCH)
+      lines.push(
+        '',
+        `  ("${PINNED_COMMIT_BRANCH}" is the branch staging keeps this checkout on and re-points`,
+        '  whenever the pinned commit changes. Commit on a branch of your own instead.)',
+      );
+    lines.push(
       '',
       `      ${rescue.rescueRef}`,
       '',
@@ -267,4 +286,64 @@ export function formatRescuedCommitsBanner(rescues: RescuedCommit[]): string {
   });
   lines.push(rule, '');
   return lines.join('\n');
+}
+
+/** What `stage-dev-packages` knows about a dev repo checkout when deciding whether to move it. */
+export type CheckoutState = {
+  /** The commit the checkout is on. */
+  headCommit: string;
+  /** The commit `revision` resolves to. */
+  targetCommit: string;
+  /** The checked-out branch, or `HEAD` when the checkout is detached. */
+  currentBranch: string;
+  /** `revision` from `dev-packages.json`: a branch name, a tag or a commit hash. */
+  revision: string;
+  /** Whether `revision` names a branch on `origin`. */
+  isRemoteBranch: boolean;
+  /** `formerPinBranches` from `dev-packages.json`. */
+  formerPinBranches?: string[];
+};
+
+/** What `stage-dev-packages` does with a dev repo checkout. See {@link decideCheckout}. */
+export type CheckoutDecision =
+  /** The checkout is on the pinned commit already. */
+  | { action: 'stay' }
+  /** The checkout is somewhere a person put it; stage what it holds and say so. */
+  | { action: 'leaveAlone'; isDetached: boolean }
+  /** Check out the pinned branch at the remote's tip. */
+  | { action: 'checkoutBranch' }
+  /** Put `branch` on the pinned commit or tag and check it out. */
+  | { action: 'checkoutCommit'; branch: string };
+
+/**
+ * Decides whether `stage-dev-packages` moves a dev repo checkout to the pinned revision.
+ *
+ * It moves a checkout only from somewhere nothing is being kept:
+ *
+ * - `main`, where a fresh clone starts;
+ * - The pinned branch itself, which follows its remote and may be force-pushed there;
+ * - {@link PINNED_COMMIT_BRANCH}, where this script left the checkout for an earlier commit or tag pin
+ *   — this is what makes a moved pin reach a checkout that already followed the previous one;
+ * - A branch `dev-packages.json` lists under `formerPinBranches`, where this script left the checkout
+ *   while `revision` still named that branch.
+ *
+ * Any other branch is somebody's, and so is a detached HEAD wherever it is found: this script never
+ * leaves a checkout detached, so a person detached it to hold it at one commit. Moving either is
+ * how a plain `npm install` silently relocates a checkout somebody was working in.
+ *
+ * The caller is expected to have refused a checkout with uncommitted changes already.
+ */
+export function decideCheckout(state: CheckoutState): CheckoutDecision {
+  if (state.headCommit === state.targetCommit) return { action: 'stay' };
+
+  const isDetached = state.currentBranch === 'HEAD';
+  const isWhereNothingIsKept =
+    !isDetached &&
+    ['main', state.revision, PINNED_COMMIT_BRANCH, ...(state.formerPinBranches ?? [])].includes(
+      state.currentBranch,
+    );
+  if (!isWhereNothingIsKept) return { action: 'leaveAlone', isDetached };
+
+  if (state.isRemoteBranch) return { action: 'checkoutBranch' };
+  return { action: 'checkoutCommit', branch: PINNED_COMMIT_BRANCH };
 }

@@ -2696,6 +2696,82 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   #2827 (`pt-4313-coverage-test-review-followup`) and its review; upstream
   `paranext/scripture-editors` PR #10.
 
+## adr-dev-packages-commit-pin: `dev-packages.json` pins the Scripture editor to a commit on its `main`, and staging keeps that checkout on a branch of its own
+
+- **Date:** 2026-11-18
+- **Status:** Accepted
+- **Context:** `dev-packages.json` named the branch `platform-yalc` of `paranext/scripture-editors`,
+  so every install and every CI run staged whatever that branch's tip was at that moment.
+  `adr-dev-packages-staging-shape-deferred` accepted the cost knowingly: a code-only push to the
+  branch "changes what core's `main` builds with no commit anywhere in core". Three things made that
+  cost worth removing. A push to the branch lands on every open pull request at once, including
+  ones that never touch the editor, and re-running does not help because each run fetches the same
+  new editor. A core set of end-to-end specs, a third of which exercise the editor, runs on every
+  pull request and is meant to become a required check — at which point one editor push can block
+  every merge in the repository. And no commit of this repo said which editor it was built with, so
+  a failure could not be attributed to an editor change or cleared of one. Any scheme that runs
+  editor tests only when something editor-related changed (the end-to-end spec picker keys on
+  `dev-packages.json`) also needs a file in this repo to change when the editor does.
+
+  Two facts shaped the mechanism. `platform-yalc` is `main` plus one README commit, rebased and
+  force-pushed, so a commit on it stops being fetchable; and `scripture-editors` has no release
+  tags for the current editor version. And `checkoutRevision` in
+  `.erb/scripts/stage-dev-packages.ts` checked a commit pin out as a detached HEAD while treating
+  every detached HEAD as a person's deliberate choice, so on a developer machine the first pin was
+  followed and every later one was not: the install warned and kept staging the previous editor.
+  CI, which clones fresh, never saw it.
+- **Decision:** `revision` names a commit on `scripture-editors`' `main`. The editor moves forward
+  through a pull request here that changes that hash (with the `package-lock.json` change, if the
+  editor's dependencies moved), and a pull request that needs a newer editor bumps the pin itself.
+
+  Staging checks a commit or tag pin out on a local branch it owns, `stage-dev-packages-pin`
+  (`PINNED_COMMIT_BRANCH`), never as a detached HEAD. `decideCheckout` in
+  `stage-dev-packages.util.ts` moves a checkout only from where nothing is being kept: `main`, the
+  pinned branch, that owned branch, and the branches `dev-packages.json` lists under
+  `formerPinBranches` (`platform-yalc`, which is where every existing clone sits). Any other branch
+  and every detached HEAD is left alone with a warning, in the script's own clone and in a sibling
+  checkout alike. Before staging re-points a local branch — the owned one, or a pinned branch — a
+  commit on it that no branch of `origin` and no tag holds is parked on a `refs/stage-rescue/…` ref.
+  That is asked of the branch being re-pointed, not of HEAD, because with two kinds of pin the
+  checkout is routinely on one branch while the other still holds somebody's commit.
+- **Alternatives:** **Keep the branch pin and name an owner** who watches this repo's CI after each
+  push — rejected: every push still reaches every pull request, the cost lands on whoever is trying
+  to merge, and builds stay unreproducible. **Keep the branch pin and take the editor specs out of
+  the required check** — rejected: those specs guard against data loss, so this weakens the check
+  exactly where it matters, and builds stay unreproducible. **Pin a release tag** — deferred: it
+  reads better than a hash and is what `adr-dev-packages-staging-shape-deferred` had in mind, but it
+  needs a release per editor change this repo wants; a tag works with this mechanism unchanged when
+  releases exist. **Git submodule** — rejected for now: the same pin with more moving parts, and
+  every consuming repository's workflow would have to check submodules out. **Publish the editor
+  and depend on a version** — still deferred, for the reason in `adr-dev-packages-staged-file-deps`.
+  **Move the editor's source into this repo** — not decided here: it removes the pin altogether but
+  is by far the largest option and depends on how this repo comes to build its own libraries.
+
+  For telling the script's placement from a person's: **keep the detached HEAD and move it when it
+  equals the commit in the staged folder's `.staged-from` marker** — rejected: staging writes that
+  marker for a checkout it left alone too, so a commit somebody parked on would match on the second
+  install and be moved. **Move a detached HEAD only in the clone under `dev-packages/`** — rejected:
+  a developer may work in that clone, and a sibling checkout that staging itself placed would then
+  never follow a bump. A branch only the script creates carries the answer in the checkout itself,
+  is visible in `git status`, and reuses the rule that already governs a pinned branch.
+- **Consequences:** Every commit here names its editor, and an editor change is tested on the pull
+  request that brings it in. Editor fixes reach this repo only when someone bumps the pin; a
+  scheduled bump pull request can automate that later. `scripture-editors`' `platform-yalc` branch,
+  its `move-platform-yalc` script and its consumer-lockfile workflow no longer decide what this repo
+  builds. Repositories that build against this one stage through this repo's script, so a fresh
+  clone of one — its CI — follows the pin with no change there. What does not follow by itself is
+  a consumer's incremental loop that skips this repo's install when `package-lock.json` is unchanged
+  and `verify:dev-packages` passes (`paratext-10-studio`'s `reset-and-patch` does): that check
+  compares dependency manifests, not the staged commit, so a pin bump that changes no dependency
+  is picked up there only at the next install. The same was true of a moved branch. A pinned commit
+  must stay reachable from a branch or tag that is never force-pushed, or a fresh clone cannot fetch
+  it — hence `main`; staging refuses a commit or tag pin that no branch or tag of the remote holds.
+  An entry of `formerPinBranches` is safe to remove only once every existing checkout has been
+  moved off that branch, which happens at the first install whose pin differs from the commit the
+  checkout is on. Going back is one line: set `revision` to a branch name again, and staging moves
+  a checkout off its owned branch onto it. The `release-prep` branch of this repo still pins the
+  editor's `release-prep` branch.
+
 ## adr-dev-packages-staged-file-deps: Dev packages are staged into the repo and consumed as `file:` dependencies, not yalc-linked over a registry pin
 
 - **Date:** 2026-08-31
@@ -2786,6 +2862,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   with no commit anywhere in core — and that is the ordinary case, not an exotic one, since
   `move-platform-yalc` rebases onto `main` rather than bumping versions. That residue is the price
   of the branch pin, and it is accepted rather than overlooked.
+- **Amended 2026-11-18:** The branch pin is replaced by a commit pin in
+  `adr-dev-packages-commit-pin`, which closes the code-only-push exposure described above for this
+  repo's `main`. The other three choices stand.
 
 ## adr-disclosure-outside-package-graphs: What ships outside the npm and NuGet graphs is disclosed in prose, not by silence
 
