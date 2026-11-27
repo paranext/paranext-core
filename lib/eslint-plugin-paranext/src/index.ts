@@ -20,6 +20,10 @@
  * - Paranext/no-hardcoded-tailwind-colors: Disallow hardcoded colors; use theme tokens
  * - Paranext/no-tailwind-shadows: Disallow shadow classes in Tailwind
  *
+ * Accessibility:
+ *
+ * - Paranext/icon-button-requires-tooltip: Require a tooltip on every icon-only button
+ *
  * Localization:
  *
  * - Paranext/require-localized-aria: Require localized strings for aria-label/describedby
@@ -49,6 +53,7 @@ import requireProvenanceComment from './rules/require-provenance-comment';
 import noHardcodedStringComparison from './rules/no-hardcoded-string-comparison';
 import registrationCleanup from './rules/registration-cleanup';
 import requireDisableComment from './rules/require-disable-comment';
+import iconButtonRequiresTooltip from './rules/icon-button-requires-tooltip';
 
 const plugin = {
   meta: {
@@ -71,6 +76,7 @@ const plugin = {
     'no-hardcoded-string-comparison': noHardcodedStringComparison,
     'registration-cleanup': registrationCleanup,
     'require-disable-comment': requireDisableComment,
+    'icon-button-requires-tooltip': iconButtonRequiresTooltip,
   },
   configs: {
     recommended: {
@@ -91,6 +97,7 @@ const plugin = {
         'paranext/no-hardcoded-string-comparison': 'error',
         'paranext/registration-cleanup': 'warn',
         'paranext/require-disable-comment': 'error',
+        'paranext/icon-button-requires-tooltip': 'error',
       },
     },
     strict: {
@@ -111,6 +118,7 @@ const plugin = {
         'paranext/no-hardcoded-string-comparison': 'error',
         'paranext/registration-cleanup': 'error',
         'paranext/require-disable-comment': 'error',
+        'paranext/icon-button-requires-tooltip': 'error',
       },
     },
   },

@@ -85,6 +85,7 @@ export const COMMENT_LIST_STRING_KEYS = Object.freeze([
   '%comment_aria_resolve_thread%',
   '%comment_aria_cancel_edit%',
   '%comment_aria_save_edit%',
+  '%comment_aria_more_actions%',
 ] as const);
 
 /**

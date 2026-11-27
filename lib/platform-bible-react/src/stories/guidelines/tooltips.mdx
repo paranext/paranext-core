@@ -53,6 +53,85 @@ toolbar items.
   </ExampleBlock>
 </ExampleBlockGroup>
 
+### Every icon button gets a tooltip
+
+An icon-only button always gets a `Tooltip`, with no exceptions for "obvious" icons, buttons that
+only appear on hover, or icon buttons that open a menu. An accessible name is **not** a substitute:
+
+- `aria-label` names the button for screen readers only; sighted users still see a bare glyph.
+- The `title` attribute shows a native browser tooltip that never appears on keyboard focus or
+  touch, can't be styled, and doesn't follow the app's tooltip delay. Don't use it for this.
+
+Keep the `aria-label` too, and use the same localized string for both, so the name a screen reader
+announces matches the tooltip a sighted user reads.
+
+<ExampleBlockGroup>
+  <ExampleBlock
+    variant="avoid"
+    previewClassName="tw:pb-8"
+    preview={
+  <Button variant="ghost" size="icon" aria-label="Save" title="Save">
+    <Save />
+  </Button>
+}
+    code={`<Button variant="ghost" size="icon" aria-label={saveLabel} title={saveLabel}>
+  <Save />
+</Button>`}
+  >
+    `aria-label` and `title` give the button a name, but sighted keyboard and touch users never see it.
+  </ExampleBlock>
+
+  <ExampleBlock
+    variant="prefer"
+    previewClassName="tw:pb-8"
+    preview={
+  <TooltipProvider>
+    <Tooltip open>
+      <TooltipTrigger asChild>
+        <Button variant="ghost" size="icon" aria-label="Save">
+          <Save />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom">Save</TooltipContent>
+    </Tooltip>
+  </TooltipProvider>
+}
+    code={`<Tooltip>
+  <TooltipTrigger asChild>
+    <Button variant="ghost" size="icon" aria-label={saveLabel}>
+      <Save />
+    </Button>
+  </TooltipTrigger>
+  <TooltipContent>{saveLabel}</TooltipContent>
+</Tooltip>`}
+  >
+    Wrap the button in `TooltipTrigger asChild`, with the same localized string as the `aria-label`.
+  </ExampleBlock>
+</ExampleBlockGroup>
+
+`platform-bible-react` has no dedicated "icon button with tooltip" component; compose it from
+`Tooltip`, `TooltipTrigger` and `TooltipContent` as above. A few situations need more than the
+basic pattern:
+
+- **The button opens a menu or popover.** Stack the triggers, tooltip outermost:
+  `<TooltipTrigger asChild><DropdownMenuTrigger asChild><Button …>`. The same applies to
+  `PopoverTrigger`.
+- **The button can be disabled.** A disabled button doesn't fire the pointer and focus events the
+  tooltip listens for, so put a `DisabledTooltipWrapper` between the trigger and the button (see
+  `comment-item.component.tsx` for an example).
+- **No `TooltipProvider` above it.** `Tooltip` must have a `TooltipProvider` ancestor. Most web
+  views and composite components already supply one; a standalone component that can't rely on
+  that wraps its own `TooltipProvider`.
+
+**Enforced by lint.** The `paranext/icon-button-requires-tooltip` ESLint rule reports any `Button`
+or `button` that has `size="icon"` (or `icon-xs`, `icon-sm`, `icon-lg`), or whose only child is an
+icon, and that has no `TooltipTrigger` above it in the same file. The rule can't see everything, so
+a clean lint run doesn't prove every icon button has a tooltip. It misses icons passed in as
+variables, a `size` that is computed, and wrapper components with other names. If a parent component
+supplies the tooltip from another file, the rule reports a false positive; disable it on that line
+with a comment naming the component that supplies the tooltip. The full list of known misses is in
+the rule's source (`lib/eslint-plugin-paranext/src/rules/icon-button-requires-tooltip.ts`).
+
 ## Keep text short
 
 Tooltip text must be short enough to scan at a glance. A tooltip is a hint, not an explanation.

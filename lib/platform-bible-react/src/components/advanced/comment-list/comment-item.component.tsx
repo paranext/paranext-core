@@ -16,7 +16,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/shadcn-ui/dropdown-menu';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/shadcn-ui/tooltip';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/shadcn-ui/tooltip';
 import { cn } from '@/utils/shadcn-ui/utils';
 import { useContentZoomTextProps } from '@/context/content-zoom-text.context';
 import { SerializedEditorState } from 'lexical';
@@ -166,6 +171,12 @@ export function CommentItem({
   }, [comment.date, localizedStrings]);
 
   const userLabel = useMemo(() => comment.user, [comment.user]);
+
+  const moreActionsLabel = localizeOrFallback(
+    '%comment_aria_more_actions%',
+    localizedStrings,
+    'More actions',
+  );
 
   // Generate initials for avatar
   const initials = useMemo(
@@ -434,11 +445,18 @@ export function CommentItem({
       </div>
       {dropdownContent && (
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon">
-              <MoreHorizontal />
-            </Button>
-          </DropdownMenuTrigger>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" aria-label={moreActionsLabel}>
+                    <MoreHorizontal />
+                  </Button>
+                </DropdownMenuTrigger>
+              </TooltipTrigger>
+              <TooltipContent>{moreActionsLabel}</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           <DropdownMenuContent align="end">{dropdownContent}</DropdownMenuContent>
         </DropdownMenu>
       )}

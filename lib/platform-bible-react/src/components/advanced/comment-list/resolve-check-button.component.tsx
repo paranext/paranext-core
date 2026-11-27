@@ -1,4 +1,10 @@
 import { Button } from '@/components/shadcn-ui/button';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/shadcn-ui/tooltip';
 import { cn } from '@/utils/shadcn-ui/utils';
 import { Check } from 'lucide-react';
 
@@ -10,7 +16,7 @@ export interface ResolveCheckButtonProps {
   disabled?: boolean;
   /** Invoked when clicked. Click propagation to the enclosing thread is already stopped. */
   onClick: () => void;
-  /** Accessible label. */
+  /** Accessible label, also shown as the button's tooltip. */
   ariaLabel: string;
 }
 
@@ -27,22 +33,29 @@ export function ResolveCheckButton({
 }: ResolveCheckButtonProps) {
   if (!show) return undefined;
   return (
-    <Button
-      variant="ghost"
-      size="icon"
-      disabled={disabled}
-      className={cn(
-        'tw:ms-auto',
-        'tw:text-primary tw:transition-opacity tw:duration-200 tw:hover:bg-primary/10',
-        'tw:opacity-0 tw:group-hover:opacity-100',
-      )}
-      onClick={(e) => {
-        e.stopPropagation();
-        onClick();
-      }}
-      aria-label={ariaLabel}
-    >
-      <Check className="tw:h-4 tw:w-4" />
-    </Button>
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            disabled={disabled}
+            className={cn(
+              'tw:ms-auto',
+              'tw:text-primary tw:transition-opacity tw:duration-200 tw:hover:bg-primary/10',
+              'tw:opacity-0 tw:group-hover:opacity-100',
+            )}
+            onClick={(e) => {
+              e.stopPropagation();
+              onClick();
+            }}
+            aria-label={ariaLabel}
+          >
+            <Check className="tw:h-4 tw:w-4" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>{ariaLabel}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }

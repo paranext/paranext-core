@@ -140,6 +140,10 @@ module.exports = {
     // Disable directives (eslint-disable, prettier-ignore, stylelint-disable) require an
     // explanatory comment on the immediately preceding line
     'paranext/require-disable-comment': 'error',
+    // Icon-only buttons must be wrapped in a TooltipTrigger (Storybook: Guidelines/Tooltips). A
+    // warning rather than an error until the existing violations across the core, extensions and
+    // platform-bible-react are fixed; raise it to 'error' once `npm run lint` reports none.
+    'paranext/icon-button-requires-tooltip': 'warn',
 
     // #endregion
   },

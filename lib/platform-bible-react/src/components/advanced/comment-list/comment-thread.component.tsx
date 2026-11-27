@@ -21,7 +21,12 @@ import { ArrowUp, AtSign, ChevronDown, ChevronUp, Mail, MailOpen } from 'lucide-
 import { formatReplacementString } from 'platform-bible-utils';
 import { memo, MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/shadcn-ui/tooltip';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/shadcn-ui/tooltip';
 import { Command, CommandItem, CommandList } from '@/components/shadcn-ui/command';
 import { CommentItem } from './comment-item.component';
 import {
@@ -437,6 +442,10 @@ export const CommentThread = memo(function CommentThread({
     handleReadStatusChange?.(threadId, newIsRead);
   }, [isRead, handleReadStatusChange, threadId]);
 
+  const toggleReadLabel = isRead
+    ? (localizedStrings['%comment_aria_mark_as_unread%'] ?? 'Mark as unread')
+    : (localizedStrings['%comment_aria_mark_as_read%'] ?? 'Mark as read');
+
   useEffect(() => {
     setShowAllReplies(false);
   }, [isSelected]);
@@ -700,22 +709,25 @@ export const CommentThread = memo(function CommentThread({
                 {localizedAssignedToText}
               </Badge>
             )}
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={(e) => {
-                e.stopPropagation();
-                toggleRead();
-              }}
-              className="tw:text-muted-foreground tw:transition tw:hover:text-foreground"
-              aria-label={
-                isRead
-                  ? (localizedStrings['%comment_aria_mark_as_unread%'] ?? 'Mark as unread')
-                  : (localizedStrings['%comment_aria_mark_as_read%'] ?? 'Mark as read')
-              }
-            >
-              {isRead ? <MailOpen /> : <Mail />}
-            </Button>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleRead();
+                    }}
+                    className="tw:text-muted-foreground tw:transition tw:hover:text-foreground"
+                    aria-label={toggleReadLabel}
+                  >
+                    {isRead ? <MailOpen /> : <Mail />}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{toggleReadLabel}</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
             {resolveActionSlot === undefined ? (
               // Generic status-resolve check (used by non-conflict threads and, via ConflictThread
               // leaving this slot undefined, by non-verseText conflicts, which resolve through a
