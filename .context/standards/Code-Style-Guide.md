@@ -270,6 +270,13 @@ Before creating a new component:
 - Use semantic color variables (e.g., `tw:bg-card`) instead of hardcoded colors.
 - Add `pr-twp` at the top level of components to apply scoped Tailwind Preflight.
 
+### RTL/LTR Support
+
+Components must support both text directions:
+
+- Use logical properties (`start`/`end`) instead of directional properties (`left`/`right`).
+- E.g., `margin-inline-start` instead of `margin-left`.
+
 ### Keyboard Shortcuts Go in the Catalog
 
 Any keyboard handler you add, change or remove — a key listener, an `onKeyDown` prop, an accelerator
@@ -280,13 +287,6 @@ defaults do not. Make each shortcut discoverable through a menu entry or the too
 triggers. How to write a shortcut per OS and how to render it (`ShortcutKeys`) are on the core
 Storybook page `Reference/Keyboard shortcuts` (`src/stories/keyboard-shortcuts.mdx`). The rule:
 `.claude/rules/keyboard-shortcuts-catalog.md`.
-
-### RTL/LTR Support
-
-Components must support both text directions:
-
-- Use logical properties (`start`/`end`) instead of directional properties (`left`/`right`).
-- E.g., `margin-inline-start` instead of `margin-left`.
 
 ### Preview App
 
