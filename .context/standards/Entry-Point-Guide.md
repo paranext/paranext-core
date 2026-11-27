@@ -18,7 +18,8 @@ This guide documents how to register menu entry points for Platform.Bible extens
 Use this guide when:
 - Adding menu items to access web views or dialogs
 - Registering commands that open features
-- Wiring up keyboard shortcuts
+- Wiring up keyboard shortcuts (every shortcut also needs an entry in
+  `src/shared/data/keyboard-shortcuts.data.ts`; see `.claude/rules/keyboard-shortcuts-catalog.md`)
 - Understanding the menu contribution system
 
 ---

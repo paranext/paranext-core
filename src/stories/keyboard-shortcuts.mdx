@@ -1,49 +1,179 @@
 import { Meta } from '@storybook/addon-docs/blocks';
-import { KeyboardShortcutsCatalog } from './keyboard-shortcuts-catalog/keyboard-shortcuts-catalog.component';
-import { rootKeyboardShortcuts } from '@shared/data/keyboard-shortcuts.data';
+import { isMacOs, Kbd, KbdGroup } from 'platform-bible-react';
+import { ShortcutKeys } from 'platform-bible-react/experimental';
+import {
+  detectViewerOs,
+  KeyboardShortcutsCatalog,
+} from './keyboard-shortcuts-catalog/keyboard-shortcuts-catalog.component';
+import {
+  paratext9OnlyShortcuts,
+  rootKeyboardShortcuts,
+} from '@shared/data/keyboard-shortcuts.data';
 
 <Meta title="Reference/Keyboard shortcuts" />
 
 # Keyboard shortcuts
 
-This is the single, complete catalog of keyboard shortcuts used across the entire Platform.Bible
-application — the application-level shortcuts handled in the Electron main process, the shortcuts
-defined by bundled extensions, and the shortcuts defined inside the shared `platform-bible-react`
-component library. It is the one source of truth for what shortcuts exist, what they do, and where
-each is handled in code.
+This is the one place for keyboard shortcuts in Platform.Bible: how to write and show a shortcut
+(the [conventions](#conventions) below), and the complete [catalog](#catalog) of every shortcut the
+application itself defines — the application-level shortcuts handled in the Electron main process, the
+shortcuts defined by bundled extensions, and the shortcuts defined inside the shared
+`platform-bible-react` component library — with what each does, where it is handled in code, where
+it conflicts with another, and how it compares with Paratext 9.
 
-For how to *display* a shortcut in the UI (per-OS formatting conventions), see the
-`platform-bible-react` Storybook under **Guidelines → Keyboard shortcuts**.
+The catalog's data lives in `src/shared/data/keyboard-shortcuts.data.ts`. Whenever you add, change,
+or remove a keyboard handler anywhere in the app, update the matching entry there in the same change
+(see `.claude/rules/keyboard-shortcuts-catalog.md`).
 
-<KeyboardShortcutsCatalog entries={rootKeyboardShortcuts} />
+The catalog documents only the specific shortcuts that matter in Paratext: chords with a modifier,
+function keys, and special keys with a Paratext meaning (such as `\` to open the markers menu). It
+does not document standard single keys — Enter, Space, the arrow keys, Tab, Escape — or "any
+character key" (type-to-search). Ask: would other apps document this as a shortcut?
+
+## Conventions
+
+When displaying a keyboard shortcut in the UI, write it the way the user's operating system writes it. Each OS has its own established convention for naming and combining modifier and special keys, and users recognize their own platform's convention at a glance. Mixing conventions — or inventing a new one — makes shortcuts harder to scan and signals that the app isn't paying attention.
+
+For background on keyboard shortcuts as *accelerators* — what they are for, when they help, and the vocabulary around them — see [Nielsen Norman Group: UI Accelerators](https://www.nngroup.com/articles/ui-accelerators/).
+
+The conventions to know:
+
+- **macOS** uses **symbols** for modifier and special keys, written together with no separator (e.g. `⇧⌘Z`). Modifier order is Control, Option, Shift, Command ([Apple HIG](https://developer.apple.com/design/human-interface-guidelines/keyboards)).
+- **Windows** uses **words** joined with `+` (e.g. `Ctrl+Shift+Z`). Modifier order is Ctrl, Shift, Alt ([Microsoft](https://support.microsoft.com/en-us/windows/keyboard-shortcuts-in-windows-dcc61a57-8ff0-cffe-9796-cb9706c75eec)).
+- **Linux** uses **words** joined with `+`. Modifier order varies by desktop environment; on GNOME and Ubuntu, the typical order is Ctrl, Alt, Shift ([Ubuntu](https://help.ubuntu.com/stable/ubuntu-help/shell-keyboard-shortcuts.html.en) / [GNOME HIG](https://developer.gnome.org/hig/guidelines/keyboard.html)).
+
+For rendering shortcuts in tooltips (the `Kbd` component, parentheses vs. no parentheses), see [Tooltips → Keyboard shortcuts in tooltips](https://paranext.github.io/paranext-core/platform-bible-react-storybook/?path=/docs/guidelines-tooltips--docs#keyboard-shortcuts-in-tooltips) in the `platform-bible-react` Storybook.
+
+> **Heads up:** Throughout this codebase and its docs, a lowercase `<kbd>` written in prose or pseudocode is often just shorthand for the `Kbd` React component, not the raw HTML `<kbd>` element. `Kbd` renders an HTML `<kbd>` under the hood, so the two are easy to conflate — unless the context is specifically about raw HTML, read `<kbd>` as the `Kbd` component.
+
+### Preferred representations by OS
+
+| Key             | macOS             | Windows                 | Linux                   |
+| --------------- | ----------------- | ----------------------- | ----------------------- |
+| Command         | `⌘`               | — (no equivalent)       | — (no equivalent)       |
+| Windows / Super | — (no equivalent) | `Win` or `⊞`            | `Super`                 |
+| Option / Alt    | `⌥`               | `Alt`                   | `Alt`                   |
+| Control         | `⌃`               | `Ctrl`                  | `Ctrl`                  |
+| Shift           | `⇧`               | `Shift`                 | `Shift`                 |
+| Caps Lock       | `⇪`               | `Caps Lock`             | `Caps Lock`             |
+| Tab             | `⇥`               | `Tab`                   | `Tab`                   |
+| Return / Enter  | `⏎` (or `Return`) | `Enter`                 | `Enter`                 |
+| Backspace       | `⌫` (or `Delete`) | `Backspace`             | `Backspace`             |
+| Forward Delete  | `⌦`               | `Delete`                | `Delete`                |
+| Escape          | `⎋` (or `Esc`)    | `Esc`                   | `Esc`                   |
+| Space           | `Space` (or `␣`)  | `Space`                 | `Space`                 |
+| Arrow keys      | `↑` `↓` `←` `→`   | `↑` `↓` `←` `→`         | `↑` `↓` `←` `→`         |
+| Page Up / Down  | `⇞` / `⇟`         | `Page Up` / `Page Down` | `Page Up` / `Page Down` |
+| Home / End      | `↖` / `↘`         | `Home` / `End`          | `Home` / `End`          |
+
+### Combining keys
+
+These rules describe the **plain-text string** form of a combination — what you write in a menu accelerator, a plain-text hint, or the `src/shared/data/keyboard-shortcuts.data.ts` catalog. When you render a shortcut in React UI, do **not** emit this joined string into a single `Kbd`; pass it to the `ShortcutKeys` component instead (see [Detecting the platform](#detecting-the-platform) below), which puts each key in its own `Kbd` inside a `KbdGroup` for you. The per-OS symbol/word choice and modifier order still apply to each key either way.
+
+- **macOS:** concatenate the symbols with no separator and no spaces. Order: Control, Option, Shift, Command, then the key. Example: `⌃⌥⇧⌘T`.
+- **Windows:** join with `+` and no spaces. Order: Ctrl, Shift, Alt, then the key. Example: `Ctrl+Shift+T`.
+- **Linux:** join with `+` and no spaces. Order varies; GNOME typically uses Ctrl, Alt, Shift, then the key. Example: `Ctrl+Alt+Shift+R`.
+
+### Detecting the platform
+
+For shortcuts rendered at runtime, pick the hint for the user's OS, then render it with the `ShortcutKeys` component rather than building a `KbdGroup` by hand. `ShortcutKeys` does not detect the OS: it renders the spelling it is given, so the caller chooses it, typically with `isMacOs()` (Windows and Linux usually share a spelling; `isWindows()` tells them apart where they don't):
+
+```tsx
+import { isMacOs } from 'platform-bible-react';
+import { ShortcutKeys } from 'platform-bible-react/experimental';
+
+<ShortcutKeys hint={isMacOs() ? '⌘Z' : 'Ctrl+Z'} />
+```
+
+Pass it the same plain-text hint described above (`⌘Z`, `Ctrl+Shift+T`, …) and it renders **one `Kbd` per key inside a `KbdGroup`** — never a single `Kbd` wrapping the whole combination — matching [Keyboard shortcuts in tooltips](https://paranext.github.io/paranext-core/platform-bible-react-storybook/?path=/docs/guidelines-tooltips--docs#keyboard-shortcuts-in-tooltips). See [Basics/ShortcutKeys](https://paranext.github.io/paranext-core/platform-bible-react-storybook/?path=/docs/basics-shortcutkeys--docs) in the `platform-bible-react` Storybook for the full set of examples (single key, Windows/Linux multi-key, macOS adjacent symbols, `Ctrl++`).
+
+Hovering the keycaps shows a tooltip that reads the shortcut out ("Press Control, Shift and N"), except where the keycaps already sit inside a tooltip. See [Shortcut keycaps read themselves out](https://paranext.github.io/paranext-core/platform-bible-react-storybook/?path=/docs/guidelines-tooltips--docs#shortcut-keycaps-read-themselves-out).
+
+The `KbdGroup` it renders is only present when a shortcut combines **more than one key**. A single-key shortcut — for example, `\` to open the marker menu — comes out as a naked `Kbd` with no group.
+
+The per-OS separator carries over from the string conventions above: **macOS** places its symbols adjacent with no separator, while **Windows** and **Linux** put a literal `+` between keys, rendered as a plain `<span>` between the `Kbd` boxes (per the [shadcn Kbd docs](https://ui.shadcn.com/docs/components/base/kbd)).
+
+**Avoid** — the whole combination stuffed into one `Kbd`, so it renders as a single keycap with the separator baked into the text. Individual keys can't be spaced or styled as keycaps:
+
+<Kbd>Ctrl+Z</Kbd>
+
+```tsx
+<Kbd>Ctrl+Z</Kbd>
+```
+
+**Prefer** — pick the spelling for the user's OS, then render it through `ShortcutKeys` instead of hand-building the group. It splits the hint into one keycap per key and keeps the separator the spelling uses:
+
+<ShortcutKeys hint={isMacOs() ? '⌘Z' : 'Ctrl+Z'} />
+
+```tsx
+<ShortcutKeys hint={isMacOs() ? '⌘Z' : 'Ctrl+Z'} />
+```
+
+**What `ShortcutKeys` renders** for `hint="Ctrl+Z"` — one `Kbd` per key inside a `KbdGroup`, with a plain `span` separator on Windows/Linux. Build this by hand only where `ShortcutKeys` genuinely doesn't fit:
+
+<KbdGroup>
+  <Kbd>Ctrl</Kbd>
+  <span>+</span>
+  <Kbd>Z</Kbd>
+</KbdGroup>
+
+```tsx
+<KbdGroup><Kbd>Ctrl</Kbd><span>+</span><Kbd>Z</Kbd></KbdGroup>
+```
+
+### Make every shortcut discoverable
+
+A shortcut the application defines should nearly always be discoverable where the user meets the
+action it runs: as the **shortcut hint on its menu item** (give the catalog entry a `command`; the
+menu then shows the chord as keycaps), or in the **tooltip of the control it triggers** (see
+[Keyboard shortcuts in tooltips](https://paranext.github.io/paranext-core/platform-bible-react-storybook/?path=/docs/guidelines-tooltips--docs#keyboard-shortcuts-in-tooltips)).
+A shortcut that appears in neither place is one most users will never find. In the catalog, an
+entry marked **Shown in menus** has a menu hint.
+
+### Why this matters
+
+Writing `Cmd+Z` on macOS, or `⌘Z` on Windows, looks wrong to users who know their platform — and it looks doubly wrong to users who use both. Following each OS's own convention is a small detail that makes the app feel native everywhere it runs.
+
+## Catalog
+
+Use **Show keys for** to see one operating system's keys; it starts on yours when the browser says
+which it is.
+
+- **Conflicts** — a red badge under a shortcut's purpose marks a chord that another entry also
+  claims where both can be active; the [Conflicts](#conflicts) section below the table lists each
+  pair once with what happens when the chord is pressed. Two views that use the same chord for
+  different things are not a conflict when they cannot both have focus.
+- **Paratext 9** — how the shortcut compares with Paratext 9, cited to the Paratext 9 feature
+  research in `.context/research/paratext-9-features/`. "Not recorded" means that research does not
+  cover the action, not that Paratext 9 had no shortcut for it. Paratext 9 shortcuts with no
+  counterpart here are listed after the conflicts.
+- **Shown in menus** — the entry has a `command`, so menu items that run it show the chord as a
+  hint. Other entries should be shown in the tooltip of the control they trigger (see
+  [Make every shortcut discoverable](#make-every-shortcut-discoverable)).
+
+<KeyboardShortcutsCatalog
+  entries={rootKeyboardShortcuts}
+  paratext9Only={paratext9OnlyShortcuts}
+  defaultOs={detectViewerOs()}
+/>
 
 ## Not catalogued
 
-The catalog above lists intentional, named application shortcuts. A repo-wide audit also surfaced
-keyboard handling that is **deliberately excluded** because it is standard within-widget interaction
-— arrow keys to move a selection, Enter/Space to activate a focused control, Escape to dismiss, Tab
-focus management — rather than a named shortcut. These follow normal accessibility conventions and
-are not tracked here.
+Standard keys for activating, moving, dismissing and typing — Enter, Space, the arrow keys, Home/End,
+Tab, Escape, and "any character key" — are not catalogued, whether a library or this repo's own code
+handles them, and neither are handlers that bind no key of their own (ones that only stop, observe
+or track keys).
+
+**Electron, OS and browser defaults are not catalogued** — including the accelerators Electron gives
+the macOS menu bar's bare menu roles (Quit, Hide, Close, Minimize, Reload, Edit menu, Full Screen);
+only menu items whose accelerator the app sets itself (the View menu's content-zoom items) are.
 
 A few specific handlers were reviewed and intentionally left out; they are noted here so they are not
 mistaken for omissions:
 
-- **Enter to run a search** — `extensions/src/platform-scripture/src/find/find.component.tsx` starts
-  the search when Enter is pressed in the focused Find box. This is standard "Enter submits the
-  focused input" behavior, not a named shortcut.
 - **`Ctrl`/`Cmd`+`B` to toggle the sidebar** — present but **commented out** in
   `lib/platform-bible-react/src/components/shadcn-ui/sidebar.tsx`, pending a UX decision. If it is
-  ever enabled, add it to the catalog.
+  ever enabled, add it to the catalog, with a conflict on `open-book-chapter-control`.
 - **Configurable reference submit keys** — `book-chapter-control.component.tsx` lets a caller pass a
   `submitKeys` prop (e.g. space or `-`) to submit the scripture reference in the navigation input.
   This is caller-configured input behavior rather than a fixed application shortcut.
-- **Escape to close the Book Chapter Control popover** — closing is Radix's `PopoverContent`
-  dismissable-layer default, with no application `Escape` key handler. The one application code path
-  is an `onEscapeKeyDown` in `book-chapter-control.component.tsx` that only ever *declines* the
-  default: in compact mode (after a quick-nav arrow) it keeps an Escape pressed with focus outside
-  the popover and its trigger from closing it. It binds no key of its own and adds no shortcut. This
-  is unlike the same component's arrow-key grid navigation, Enter/Space grid activation, and
-  Backspace back-navigation, which ARE hand-rolled and ARE catalogued above
-  (`book-chapter-control-move-grid-highlight`, `book-chapter-control-activate-grid-item`,
-  `book-chapter-control-back`) — those bypass cmdk's defaults and implement custom grid semantics,
-  while Escape is otherwise an unmodified library default with nothing to document.

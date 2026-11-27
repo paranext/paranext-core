@@ -4,7 +4,7 @@ import {
   getShortcutHintForCommand,
   splitShortcutAlternatives,
 } from '@shared/utils/keyboard-shortcut-hint.util';
-import { rootKeyboardShortcuts } from './keyboard-shortcuts.data';
+import { paratext9OnlyShortcuts, rootKeyboardShortcuts } from './keyboard-shortcuts.data';
 import type { KeyboardShortcutEntry } from './keyboard-shortcuts.model';
 
 const MAIN_PROCESS_LOCATION_PREFIX = 'src/main/';
@@ -402,5 +402,59 @@ describe('paragraph marker menu chord', () => {
   it('shows no menu hint, since the chord works only on a selected paragraph marker', () => {
     expect(entry).toBeDefined();
     expect(entry?.command).toBeUndefined();
+  });
+});
+
+describe('keyboard shortcuts catalog annotations', () => {
+  it('has unique entry ids', () => {
+    const ids = rootKeyboardShortcuts.map((entry) => entry.id);
+    expect(ids.length).toBeGreaterThan(0);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  const conflictPairs = rootKeyboardShortcuts.flatMap((entry) =>
+    (entry.conflicts ?? []).map((conflict): [string, string] => [entry.id, conflict.id]),
+  );
+
+  it('has conflicts to check', () => {
+    // Guards the sweep below: an empty list would pass it by running nothing.
+    expect(conflictPairs.length).toBeGreaterThan(0);
+  });
+
+  it.each(conflictPairs)(
+    '%s conflict with %s names another entry that lists it back',
+    (id, other) => {
+      expect(other).not.toBe(id);
+      const otherEntry = rootKeyboardShortcuts.find((candidate) => candidate.id === other);
+      expect(otherEntry).toBeDefined();
+      expect(otherEntry?.conflicts?.map((conflict) => conflict.id)).toContain(id);
+    },
+  );
+});
+
+describe('Paratext 9 comparisons', () => {
+  const sources: [id: string, source: string][] = [
+    ...rootKeyboardShortcuts.flatMap((entry): [string, string][] =>
+      entry.paratext9 ? [[entry.id, entry.paratext9.source]] : [],
+    ),
+    ...paratext9OnlyShortcuts.map((shortcut): [string, string] => [shortcut.id, shortcut.source]),
+  ];
+
+  it('has sources to check', () => {
+    expect(sources.length).toBeGreaterThan(0);
+  });
+
+  it.each(sources)('%s cites a section of a Paratext 9 research file: "%s"', (_id, source) => {
+    const [file] = source.split(' § ');
+    expect(file.startsWith('.context/research/paratext-9-features/')).toBe(true);
+    expect(source).toContain(' § ');
+    expect(existsSync(path.join(process.cwd(), file))).toBe(true);
+  });
+
+  it('gives each Paratext-9-only shortcut a unique id that no catalog entry uses', () => {
+    const ids = paratext9OnlyShortcuts.map((shortcut) => shortcut.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    const catalogIds = new Set(rootKeyboardShortcuts.map((entry) => entry.id));
+    expect(ids.filter((id) => catalogIds.has(id))).toEqual([]);
   });
 });

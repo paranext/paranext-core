@@ -84,6 +84,12 @@ Flag (Critical or Important):
   `platform-bible-react`. A dismissal must be a code comment at the call site, not just noted in
   the PR description — that's what makes this decidable from the diff.
   (see `.claude/rules/cross-view-sync-hidden-views.md`)
+- A keyboard shortcut handler added, changed or removed (key listener, `onKeyDown`, accelerator
+  the app sets, `before-input-event` branch, `useHotkeys`, Lexical `KEY_DOWN_COMMAND`; standard
+  single keys like Enter, Space, arrows, Tab and Escape are not catalogued) without the
+  matching change to `src/shared/data/keyboard-shortcuts.data.ts`, or a new chord that overlaps an
+  existing one without a recorded `conflicts` entry (Important). Grep the diff for the handler shapes;
+  see `.claude/rules/keyboard-shortcuts-catalog.md`
 
 ---
 
@@ -207,6 +213,8 @@ ls lib/platform-bible-react/src/stories/home/
 ls lib/platform-bible-react/src/stories/guidelines/
 ls lib/platform-bible-react/src/stories/guides/
 ```
+
+Also read `src/stories/keyboard-shortcuts.mdx` (the core Storybook's Reference/Keyboard shortcuts page: per-OS shortcut conventions) when the change shows or binds a keyboard shortcut.
 
 Read all files found in those directories. They are MDX documentation and TSX story files that define Platform.Bible's design system — covering vocabulary, capitalization, interaction patterns, component choices, ellipsis usage, responsiveness, theming, directionality, and more.
 

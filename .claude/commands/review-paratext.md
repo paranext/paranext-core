@@ -208,6 +208,8 @@ Dispatch four instances of the `review-analyzer` agent in parallel using the Age
 | Agent 3  | `compliance` | Priority 7 (Test coverage), Priority 8 (Localization), Priority 9 (Template propagation), Priority 10 (Storybook Stories), Priority 11 (Build config/process) |
 | Agent 4  | `ux`         | UX Design Guide — reads guide files from Storybook source; skips automatically if no UI code was changed           |
 
+Keyboard shortcuts are checked by the `api` pass: a keyboard shortcut handler (not a standard single key like Enter, an arrow or Escape) added, changed or removed must update `src/shared/data/keyboard-shortcuts.data.ts` in the same branch (see `.claude/rules/keyboard-shortcuts-catalog.md`). If an in-review change touches a key handler, update that catalog entry as part of the change.
+
 When dispatching each agent, use `subagent_type: "review-analyzer"` in the Agent tool call to target the specialized analysis agent (not a generic agent).
 
 Prompt for each agent instance (substitute `$FOCUS`, the actual values, and `$PURPOSE`):
