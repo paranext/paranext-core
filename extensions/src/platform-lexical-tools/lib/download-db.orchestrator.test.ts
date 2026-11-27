@@ -26,8 +26,7 @@ const baseOpts = {
   noticeFilenames: ['LICENSE.md', 'SOURCE.md'],
 };
 
-const RAW_BASE =
-  'https://raw.githubusercontent.com/paranext/dependencies/pt-5085-rebuild-lexical-db/lexical-db';
+const RAW_BASE = 'https://raw.githubusercontent.com/paranext/dependencies/main/lexical-db';
 
 /** Every URL `downloadFile` was asked for, in call order. */
 function downloadedUrls(deps: Deps): string[] {
@@ -55,7 +54,7 @@ describe('runDownload', () => {
 
   it('strict + 404 on checksum: rethrows FileNotFoundError', async () => {
     const fetchUrl =
-      'https://raw.githubusercontent.com/paranext/dependencies/pt-5085-rebuild-lexical-db/lexical-db/lexical.db.xz.sha256';
+      'https://raw.githubusercontent.com/paranext/dependencies/main/lexical-db/lexical.db.xz.sha256';
     const deps = makeDeps({
       fetchRemoteChecksum: vi.fn(async () => {
         throw new FileNotFoundError(fetchUrl);
@@ -69,7 +68,7 @@ describe('runDownload', () => {
 
   it('lenient + 404 on checksum: logs and returns cleanly', async () => {
     const fetchUrl =
-      'https://raw.githubusercontent.com/tjcouch-sil/dependencies/pt-5085-rebuild-lexical-db/lexical-db/lexical.db.xz.sha256';
+      'https://raw.githubusercontent.com/tjcouch-sil/dependencies/main/lexical-db/lexical.db.xz.sha256';
     const log = vi.fn();
     const deps = makeDeps({
       fetchRemoteChecksum: vi.fn(async () => {
@@ -86,7 +85,7 @@ describe('runDownload', () => {
 
   it('lenient + 404 on DB download: logs and returns cleanly', async () => {
     const dbUrl =
-      'https://media.githubusercontent.com/media/tjcouch-sil/dependencies/pt-5085-rebuild-lexical-db/lexical-db/lexical.db.xz';
+      'https://media.githubusercontent.com/media/tjcouch-sil/dependencies/main/lexical-db/lexical.db.xz';
     const log = vi.fn();
     const deps = makeDeps({
       downloadFile: vi.fn(async () => {
@@ -304,7 +303,7 @@ describe('runDownload', () => {
 
   it('lenient + 404 on a notice: warns about the obligation but still prepares the DB', async () => {
     const noticeUrl =
-      'https://raw.githubusercontent.com/tjcouch-sil/dependencies/pt-5085-rebuild-lexical-db/lexical-db/LICENSE.md';
+      'https://raw.githubusercontent.com/tjcouch-sil/dependencies/main/lexical-db/LICENSE.md';
     const warn = vi.fn();
     const deps = makeDeps({
       downloadFile: vi.fn(async (url: string) => {
