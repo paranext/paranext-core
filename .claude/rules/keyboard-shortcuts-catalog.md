@@ -4,24 +4,67 @@ Platform.Bible documents every keyboard shortcut used anywhere in the applicatio
 bundled extensions, and the `platform-bible-react` component library — in ONE curated catalog (there
 is no automated scan; it is maintained by hand):
 
-- **Single source of truth** → `src/shared/data/keyboard-shortcuts.data.ts`
+- **Single source of truth** → `src/shared/data/keyboard-shortcuts.data.ts` (types in
+  `keyboard-shortcuts.model.ts`, checks in `keyboard-shortcuts.data.test.ts`)
 
-It is rendered by the `KeyboardShortcutsCatalog` component, which lives in the main Platform.Bible
-Storybook at `src/stories/keyboard-shortcuts-catalog/keyboard-shortcuts-catalog.component.tsx`, on
-the **Reference → Keyboard shortcuts** page.
+It is shown on ONE page in the main Platform.Bible (core) Storybook: **Reference → Keyboard
+shortcuts** (`src/stories/keyboard-shortcuts.mdx`), which holds both the per-OS display conventions
+and the catalog, rendered by `KeyboardShortcutsCatalog`
+(`src/stories/keyboard-shortcuts-catalog/keyboard-shortcuts-catalog.component.tsx`). The
+`platform-bible-react` Storybook's `Guidelines/Keyboard shortcuts` page is only a pointer to it; do
+not add content there.
 
 ### The rule
 
 Whenever you **add, change, or remove** a keyboard handler — a `keydown`/`keyup`/`keypress`
-listener, an Electron accelerator or `before-input-event` branch, or a `react-hotkeys-hook`
+listener, an `onKeyDown`/`onKeyDownCapture` prop, an Electron accelerator the app sets, a
+`before-input-event` branch, a Lexical `KEY_DOWN_COMMAND` handler, or a `react-hotkeys-hook`
 `useHotkeys` binding — add, update, or remove the matching `KeyboardShortcutEntry` in
-`src/shared/data/keyboard-shortcuts.data.ts` as part of the same change, no matter which part of the app
-(main process, extension, or component library) the handler lives in.
+`src/shared/data/keyboard-shortcuts.data.ts` as part of the same change, no matter which part of the
+app (main process, extension, or component library) the handler lives in.
 
 Keep each entry's `purpose`, `category`, `context`, per-OS `keys`, and `locations` (repo-relative
-file paths) accurate. Use the per-OS display conventions documented in the
-`Guidelines/Keyboard shortcuts` Storybook page (macOS symbols with no separator; Windows/Linux
-words joined with `+`).
+file paths) accurate. Use the per-OS display conventions on the **Reference → Keyboard shortcuts**
+page (macOS symbols with no separator; Windows/Linux words joined with `+`).
+
+What belongs in the catalog — only shortcuts the application itself defines:
+
+- Every named shortcut (a chord, function key, or single key that triggers an action) that app code
+  binds, including a menu item whose `accelerator` the app sets itself.
+- Hand-rolled widget navigation — arrow/Home/End/Enter/Space/Escape handling this repo implements
+  itself for a custom list, grid, tree or table — goes in the `Widget navigation` category.
+- Electron, OS and browser defaults stay out — including the accelerators Electron supplies for a
+  bare macOS menu `role` (Quit, Hide, Close, Reload, the Edit menu, Full Screen) — as do library
+  defaults (Radix/cmdk arrow keys, a native button's Enter/Space, a Radix dialog's Escape) and
+  handlers that bind no key of their own. Never add an entry from memory: cite the code that binds
+  it in `locations`; when you deliberately leave
+  one out, add a line to the page's **Not catalogued** section so it is not mistaken for an
+  omission.
+
+### Make shortcuts discoverable
+
+An app-defined shortcut should nearly always be discoverable: shown as the shortcut hint on the
+menu item that runs the same action (set the entry's `command`; see below), or in the tooltip of
+the control it triggers (`Guidelines/Tooltips` → "Keyboard shortcuts in tooltips" in the
+`platform-bible-react` Storybook). When you add a shortcut, add one of the two in the same change,
+or say in the PR why neither fits. Hand-rolled widget navigation is exempt.
+
+### Conflicts
+
+When a new or changed chord overlaps another entry's chord in a context where both can be active —
+one press reaches both handlers, or one shadows the other — record it in `conflicts` on **both**
+entries, with a note saying what happens and which handler wins if known. The test fails on a
+conflict that is not listed back. Before choosing a chord, search the catalog for it on all three
+OS columns, and check it against the OS and Electron defaults (the macOS menu bar's ⌘Q, ⌘W, ⌘R and
+Edit-menu chords, for example), which are not catalogued. The page shows conflicts as badges and in its
+Conflicts section.
+
+### Paratext 9 comparison
+
+When `.context/research/paratext-9-features/` covers the action, set `paratext9` (`status`, the
+Paratext 9 `keys`, a `note`, and the `source` file `§` section). Record only what that research
+states — never a Paratext 9 chord from memory. A Paratext 9 shortcut with no counterpart goes in
+`paratext9OnlyShortcuts`; when you add its counterpart, move it to that entry's `paratext9`.
 
 ### Menu shortcut hints
 

@@ -178,9 +178,9 @@ export function confirmingKey(intent: ArmedHint['intent']): LocalizeKey {
 }
 
 /**
- * Platform symbol macOS uses for each confirming key, per the Keyboard shortcuts guideline's
- * "Preferred representations by OS" table (Backspace `⌫`, Forward Delete `⌦`). These are OS
- * symbols, not translated text, so they bypass localization entirely.
+ * Platform symbol macOS uses for each confirming key, per the "Preferred representations by OS"
+ * table on the core Storybook's Reference/Keyboard shortcuts page (Backspace `⌫`, Forward Delete
+ * `⌦`). These are OS symbols, not translated text, so they bypass localization entirely.
  */
 const MAC_KEY_SYMBOLS: Record<ArmedHint['intent'], string> = {
   deleteBackward: '⌫',

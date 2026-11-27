@@ -29,6 +29,8 @@ Reviews a PR for accessibility gaps, performance anti-patterns, and UX consisten
 #### Accessibility
 - Interactive elements must have ARIA labels → **missing = warning**
 - All elements reachable via Tab, custom widgets support keyboard patterns → **missing = warning**
+- A keyboard handler added, changed or removed without its entry in `src/shared/data/keyboard-shortcuts.data.ts`, or a new chord that overlaps an existing one with no recorded conflict (see `.claude/rules/keyboard-shortcuts-catalog.md`) → **missing = warning**
+- A shortcut shown in the UI not written the user's OS way, or not rendered with `ShortcutKeys` (see the core Storybook page `Reference/Keyboard shortcuts`, `src/stories/keyboard-shortcuts.mdx`) → **concern = suggestion**
 - Semantic HTML used appropriately → **improvement = suggestion**
 - Color contrast meets WCAG AA → **concern = suggestion**
 
@@ -52,6 +54,7 @@ Return findings as a JSON array. Each finding must use `"perspective": "ux"`.
 |---------|----------|
 | Missing ARIA label | `warning` |
 | Missing keyboard navigation implementation | `warning` |
+| Keyboard handler not in the shortcuts catalog | `warning` |
 | Missing loading/error/empty state | `warning` |
 | Performance anti-pattern | `warning` |
 | Custom component where platform-bible-react exists | `warning` |

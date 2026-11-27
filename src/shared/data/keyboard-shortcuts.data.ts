@@ -3,7 +3,10 @@ import {
   CONTENT_ZOOM_OUT_SHORTCUT,
   CONTENT_ZOOM_RESET_SHORTCUT,
 } from 'platform-bible-utils';
-import type { KeyboardShortcutEntry } from '@shared/data/keyboard-shortcuts.model';
+import type {
+  KeyboardShortcutEntry,
+  Paratext9OnlyShortcut,
+} from '@shared/data/keyboard-shortcuts.model';
 
 /**
  * The complete catalog of keyboard shortcuts used across the entire Platform.Bible application:
@@ -13,10 +16,13 @@ import type { KeyboardShortcutEntry } from '@shared/data/keyboard-shortcuts.mode
  * update the matching entry here. Set `command` on an entry to show its chord as a hint beside menu
  * items that run that command.
  *
- * Note on macOS modifier order: the `Guidelines/Keyboard shortcuts` page orders macOS modifiers
- * Control, Option, Shift, Command. `next-tab-group` and `previous-tab-group` show Command before
- * Option (`⌘⌥…`) to mirror their handler code. Entries with a `command` are shown in menus, so
- * their macOS keys follow the guideline order.
+ * Record where a chord overlaps another entry's in `conflicts` (on both entries), and how it
+ * compares with Paratext 9 in `paratext9` — see `.claude/rules/keyboard-shortcuts-catalog.md`.
+ *
+ * Note on macOS modifier order: the `Reference/Keyboard shortcuts` page in the core Storybook
+ * orders macOS modifiers Control, Option, Shift, Command. `next-tab-group` and `previous-tab-group`
+ * show Command before Option (`⌘⌥…`) to mirror their handler code. Entries with a `command` are
+ * shown in menus, so their macOS keys follow the guideline order.
  */
 export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
   {
@@ -68,6 +74,13 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     context: 'Main process (global)',
     keys: { macOS: 'F8', windows: 'F8', linux: 'F8' },
     locations: ['src/main/main.ts', 'src/main/verse-navigation-shortcuts.util.ts'],
+    paratext9: {
+      status: 'same',
+      keys: 'F8',
+      note: 'Paratext 9 had no macOS version, so ⌘ in place of Ctrl on macOS is new.',
+      source:
+        '.context/research/paratext-9-features/01_Translation_Workspace.md § 1.3 BCV Navigation',
+    },
   },
   {
     id: 'go-to-previous-chapter',
@@ -76,6 +89,13 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     context: 'Main process (global)',
     keys: { macOS: '⌘F8', windows: 'Ctrl+F8', linux: 'Ctrl+F8' },
     locations: ['src/main/main.ts', 'src/main/verse-navigation-shortcuts.util.ts'],
+    paratext9: {
+      status: 'same',
+      keys: 'Ctrl+F8',
+      note: 'Paratext 9 had no macOS version, so ⌘ in place of Ctrl on macOS is new.',
+      source:
+        '.context/research/paratext-9-features/01_Translation_Workspace.md § 1.3 BCV Navigation',
+    },
   },
   {
     id: 'go-to-next-book',
@@ -84,6 +104,13 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     context: 'Main process (global)',
     keys: { macOS: 'F9', windows: 'F9', linux: 'F9' },
     locations: ['src/main/main.ts', 'src/main/verse-navigation-shortcuts.util.ts'],
+    paratext9: {
+      status: 'same',
+      keys: 'F9',
+      note: 'Paratext 9 had no macOS version, so ⌘ in place of Ctrl on macOS is new.',
+      source:
+        '.context/research/paratext-9-features/01_Translation_Workspace.md § 1.3 BCV Navigation',
+    },
   },
   {
     id: 'go-to-previous-book',
@@ -92,6 +119,13 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     context: 'Main process (global)',
     keys: { macOS: '⌘F9', windows: 'Ctrl+F9', linux: 'Ctrl+F9' },
     locations: ['src/main/main.ts', 'src/main/verse-navigation-shortcuts.util.ts'],
+    paratext9: {
+      status: 'same',
+      keys: 'Ctrl+F9',
+      note: 'Paratext 9 had no macOS version, so ⌘ in place of Ctrl on macOS is new.',
+      source:
+        '.context/research/paratext-9-features/01_Translation_Workspace.md § 1.3 BCV Navigation',
+    },
   },
   {
     id: 'go-to-next-verse',
@@ -100,6 +134,13 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     context: 'Main process (global)',
     keys: { macOS: '⌘↓', windows: 'Ctrl+↓', linux: 'Ctrl+↓' },
     locations: ['src/main/main.ts', 'src/main/verse-navigation-shortcuts.util.ts'],
+    paratext9: {
+      status: 'same',
+      keys: 'Ctrl+arrow',
+      note: 'The research lists "Ctrl+arrow" for verse navigation without naming which arrow keys.',
+      source:
+        '.context/research/paratext-9-features/01_Translation_Workspace.md § 1.3 BCV Navigation',
+    },
   },
   {
     id: 'go-to-previous-verse',
@@ -108,6 +149,13 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     context: 'Main process (global)',
     keys: { macOS: '⌘↑', windows: 'Ctrl+↑', linux: 'Ctrl+↑' },
     locations: ['src/main/main.ts', 'src/main/verse-navigation-shortcuts.util.ts'],
+    paratext9: {
+      status: 'same',
+      keys: 'Ctrl+arrow',
+      note: 'The research lists "Ctrl+arrow" for verse navigation without naming which arrow keys.',
+      source:
+        '.context/research/paratext-9-features/01_Translation_Workspace.md § 1.3 BCV Navigation',
+    },
   },
   {
     id: 'open-book-chapter-control',
@@ -116,6 +164,13 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     context: 'Main process (global)',
     keys: { macOS: '⌘B', windows: 'Ctrl+B', linux: 'Ctrl+B' },
     locations: ['src/main/main.ts', 'src/main/verse-navigation-shortcuts.util.ts'],
+    paratext9: {
+      status: 'same',
+      keys: 'Ctrl+B',
+      note: 'In Paratext 9 it moved focus to the navigation area of the toolbar.',
+      source:
+        '.context/research/paratext-9-features/01_Translation_Workspace.md § 1.3 BCV Navigation',
+    },
   },
   {
     id: 'open-home',
@@ -268,6 +323,13 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
       'src/main/services/web-view.service-router.ts',
     ],
     command: 'platform.webViewContentZoomIn',
+    paratext9: {
+      status: 'same',
+      keys: 'Ctrl+Plus',
+      note: 'Paratext 9 zoomed the focused pane too.',
+      source:
+        '.context/research/paratext-9-features/01_Translation_Workspace.md § 1.18 Pane Zoom (View > Zoom)',
+    },
   },
   {
     id: 'content-zoom-out',
@@ -286,6 +348,13 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
       'src/main/services/web-view.service-router.ts',
     ],
     command: 'platform.webViewContentZoomOut',
+    paratext9: {
+      status: 'same',
+      keys: 'Ctrl+Minus',
+      note: 'Paratext 9 zoomed the focused pane too.',
+      source:
+        '.context/research/paratext-9-features/01_Translation_Workspace.md § 1.18 Pane Zoom (View > Zoom)',
+    },
   },
   {
     id: 'content-zoom-reset',
@@ -307,6 +376,13 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
       'src/main/services/web-view.service-router.ts',
     ],
     command: 'platform.webViewContentZoomReset',
+    paratext9: {
+      status: 'differs',
+      keys: 'Ctrl+0',
+      note: 'Paratext 9 returned the pane to actual size (100 %); here it returns to the default zoom set in Settings.',
+      source:
+        '.context/research/paratext-9-features/01_Translation_Workspace.md § 1.18 Pane Zoom (View > Zoom)',
+    },
   },
   {
     id: 'content-zoom-wheel',
@@ -342,7 +418,22 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
       'src/main/app-window-input.util.ts',
       'src/renderer/services/overlays/overlay.service-host.ts',
       'src/renderer/components/overlays/overlay-command-palette.component.tsx',
+      'src/renderer/components/overlays/overlay-popover.component.tsx',
       'src/renderer/components/overlay-host.component.tsx',
+    ],
+    conflicts: [
+      {
+        id: 'scripture-close-markers-menu',
+        note: 'Main announces Escape without preventDefault, so one press dismisses any open overlay AND closes the markers menu in the focused editor. Both run.',
+      },
+      {
+        id: 'footnote-close-markers-menu',
+        note: 'Main announces Escape without preventDefault, so one press dismisses any open overlay AND closes the footnote editor’s markers menu. Both run.',
+      },
+      {
+        id: 'shortcut-keys-dismiss-tooltip',
+        note: 'The keycap tooltip closes on the same press that main announces; the key is not consumed, so an open menu overlay is dismissed too. Both run, by design.',
+      },
     ],
   },
   {
@@ -426,6 +517,12 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
       'lib/platform-bible-react/src/components/advanced/footnote-editor/footnote-editor.component.tsx',
       'lib/platform-bible-react/src/components/advanced/marker-palette-keydown.util.ts',
     ],
+    paratext9: {
+      status: 'same',
+      keys: '\\',
+      note: 'Paratext 9 also inserted character and note markers by typing a backslash in Standard view.',
+      source: '.context/research/paratext-9-features/13_Data_Formats.md § 13.1 USFM Support',
+    },
   },
   {
     id: 'scripture-markers-menu-commit-typed',
@@ -526,6 +623,12 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
       'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
       'lib/platform-bible-react/src/components/advanced/marker-palette-keydown.util.ts',
     ],
+    conflicts: [
+      {
+        id: 'dismiss-overlays',
+        note: 'The same Escape also dismisses any open overlay (main announces it without preventDefault). Both run.',
+      },
+    ],
   },
   {
     id: 'scripture-find',
@@ -550,6 +653,13 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
       'extensions/src/platform-scripture/src/find/use-focus-search-on-invoke.hook.ts',
     ],
     command: 'platformScripture.openFind',
+    paratext9: {
+      status: 'same',
+      keys: 'Ctrl+F',
+      note: 'Paratext 9 opened its Find/Replace dialog; on macOS the chord here is ⌃F. Paratext 9’s Replace chord (Ctrl+H) has no counterpart here.',
+      source:
+        '.context/research/paratext-9-features/01_Translation_Workspace.md § 1.7 Find and Replace',
+    },
   },
   {
     id: 'scripture-insert-comment',
@@ -568,6 +678,12 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
       'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.utils.ts',
     ],
     command: 'platformScriptureEditor.insertCommentAtSelection',
+    paratext9: {
+      status: 'same',
+      keys: 'Ctrl+Shift+N',
+      note: 'Paratext 9’s Insert > Project note. Ctrl+Alt+M is an extra alternative here.',
+      source: '.context/research/paratext-9-features/10_Collaboration_Sync.md § 10.4 Project Notes',
+    },
   },
   {
     id: 'scripture-toggle-view',
@@ -582,6 +698,13 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
       'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
       'extensions/src/platform-scripture-editor/src/editor-chords.util.ts',
     ],
+    paratext9: {
+      status: 'differs',
+      keys: 'Ctrl+E',
+      note: 'Same chord, narrower behavior: Paratext 9’s Switch Scripture view cycled through its views (Standard, Unformatted, Preview, …) in every text window. Here it switches only between Standard view and Preview, and only in Power mode.',
+      source:
+        '.context/research/paratext-9-features/01_Translation_Workspace.md § 1.2 Editor Views',
+    },
   },
   {
     id: 'scripture-insert-footnote',
@@ -883,6 +1006,12 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
       'lib/platform-bible-react/src/components/advanced/footnote-editor/footnote-editor.component.tsx',
       'lib/platform-bible-react/src/components/advanced/marker-palette-keydown.util.ts',
     ],
+    conflicts: [
+      {
+        id: 'dismiss-overlays',
+        note: 'The same Escape also dismisses any open overlay (main announces it without preventDefault). Both run.',
+      },
+    ],
   },
   {
     id: 'footnote-new-paragraph',
@@ -1020,6 +1149,12 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     context: 'Shortcut keycaps in any menu, while their tooltip is open',
     keys: { macOS: '⎋', windows: 'Esc', linux: 'Esc' },
     locations: ['lib/platform-bible-react/src/components/basics/shortcut-keys.component.tsx'],
+    conflicts: [
+      {
+        id: 'dismiss-overlays',
+        note: 'The same Escape is announced by main to dismiss the topmost overlay. Both run, by design.',
+      },
+    ],
   },
   {
     id: 'menubar-close',
@@ -1126,5 +1261,306 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
       'src/renderer/components/onboarding-tour/tour.component.tsx',
       'src/renderer/components/onboarding-tour/onboarding-tour.component.tsx',
     ],
+  },
+  // Forms: keys a single field or dialog claims beyond its controls' native behavior.
+  {
+    id: 'marker-settings-dialog-submit',
+    purpose: 'Save the marker settings, as the dialog’s save button does',
+    category: 'Forms',
+    context: 'Marker settings dialog, in either of its text fields',
+    keys: { macOS: '⏎', windows: 'Enter', linux: 'Enter' },
+    locations: [
+      'extensions/src/platform-scripture/src/components/marker-settings-dialog.component.tsx',
+    ],
+  },
+  {
+    id: 'zoom-stepper-percent-field',
+    purpose:
+      'Apply the typed zoom percentage (Enter), or discard it and show the current zoom again (Escape)',
+    category: 'Forms',
+    context: 'Settings, the zoom percentage field',
+    keys: { macOS: '⏎ / ⎋', windows: 'Enter / Esc', linux: 'Enter / Esc' },
+    locations: [
+      'src/renderer/components/settings-tabs/settings-components/zoom-stepper.component.tsx',
+    ],
+  },
+  {
+    id: 'find-replace-selected-result',
+    purpose:
+      'Replace the selected result, when the result card itself (not one of its buttons) has focus',
+    category: 'Editing',
+    context: 'Find web view, Replace mode, on the selected result',
+    keys: { macOS: '⏎ / ␣', windows: 'Enter / Space', linux: 'Enter / Space' },
+    locations: ['extensions/src/platform-scripture/src/find/search-result.component.tsx'],
+  },
+  // Widget keyboard navigation: arrow, Home/End, Enter/Space and Escape handling that this repo
+  // implements by hand for a custom list, grid, tree or table — not a library default. Kept in its
+  // own category so the named shortcuts above stay easy to scan.
+  {
+    id: 'find-results-move',
+    purpose: 'Move to the previous or next result, the first or last, or a page up or down',
+    category: 'Widget navigation',
+    context: 'Find web view, results list focused',
+    keys: {
+      macOS: '↑ / ↓ / ↖ / ↘ / ⇞ / ⇟',
+      windows: '↑ / ↓ / Home / End / Page Up / Page Down',
+      linux: '↑ / ↓ / Home / End / Page Up / Page Down',
+    },
+    locations: ['extensions/src/platform-scripture/src/find/find.component.tsx'],
+  },
+  {
+    id: 'manage-books-grid-move',
+    purpose: 'Move between books in the book grid, or to the first or last book',
+    category: 'Widget navigation',
+    context: 'Manage books dialog, book grid',
+    keys: {
+      macOS: '↑ / ↓ / ← / → / ↖ / ↘',
+      windows: '↑ / ↓ / ← / → / Home / End',
+      linux: '↑ / ↓ / ← / → / Home / End',
+    },
+    locations: [
+      'extensions/src/platform-scripture/src/manage-books-dialog/book-grid.component.tsx',
+    ],
+  },
+  {
+    id: 'manage-books-grid-toggle-book',
+    purpose: 'Select or deselect the focused book, and make it the anchor for a Shift-click range',
+    category: 'Widget navigation',
+    context: 'Manage books dialog, book grid',
+    keys: { macOS: '␣ / ⏎', windows: 'Space / Enter', linux: 'Space / Enter' },
+    locations: [
+      'extensions/src/platform-scripture/src/manage-books-dialog/book-grid.component.tsx',
+    ],
+  },
+  {
+    id: 'listbox-move',
+    purpose: 'Move to the previous or next option, or the first or last',
+    category: 'Widget navigation',
+    context:
+      'Lists built on the shared listbox hook: the comment list, the dictionary list, the source-language indexed list, and the project picker',
+    keys: {
+      macOS: '↑ / ↓ / ↖ / ↘',
+      windows: '↑ / ↓ / Home / End',
+      linux: '↑ / ↓ / Home / End',
+    },
+    locations: [
+      'lib/platform-bible-react/src/hooks/listbox-keyboard-navigation.hook.ts',
+      'lib/platform-bible-react/src/components/advanced/comment-list/comment-list.component.tsx',
+      'extensions/src/platform-lexical-tools/src/components/dictionary/dictionary-list.component.tsx',
+      'lib/platform-bible-react/src/components/advanced/source-language-indexed-list/source-language-indexed-list.component.tsx',
+      'src/renderer/components/projects/project-picker.component.tsx',
+    ],
+  },
+  {
+    id: 'listbox-select-option',
+    purpose: 'Select the focused option',
+    category: 'Widget navigation',
+    context:
+      'Lists built on the shared listbox hook: the comment list, the dictionary list, the source-language indexed list, and the project picker',
+    keys: { macOS: '␣ / ⏎', windows: 'Space / Enter', linux: 'Space / Enter' },
+    locations: [
+      'lib/platform-bible-react/src/hooks/listbox-keyboard-navigation.hook.ts',
+      'src/renderer/components/projects/project-picker.component.tsx',
+    ],
+  },
+  {
+    id: 'listbox-enter-option',
+    purpose:
+      'Move into the focused option’s first control (→); from inside the selected option, move between its controls (↑/↓) or back out to the option (← outside a text field, or Escape)',
+    category: 'Widget navigation',
+    context:
+      'Lists built on the shared listbox hook: the comment list, the dictionary list, the source-language indexed list, and the project picker',
+    keys: {
+      macOS: '→ / ↑ / ↓ / ← / ⎋',
+      windows: '→ / ↑ / ↓ / ← / Esc',
+      linux: '→ / ↑ / ↓ / ← / Esc',
+    },
+    locations: ['lib/platform-bible-react/src/hooks/listbox-keyboard-navigation.hook.ts'],
+    conflicts: [
+      {
+        id: 'comment-list-collapse-thread',
+        note: 'In the comment list, Escape is taken first to collapse the thread, so it does not move focus back to the option there; ← still does.',
+      },
+    ],
+  },
+  {
+    id: 'dictionary-type-to-search',
+    purpose:
+      'Start a search with the typed character: focus the search box and put the character in it',
+    category: 'Widget navigation',
+    context: 'Dictionary web view, entry list focused (not inside a control)',
+    keys: {
+      macOS: 'Any character key',
+      windows: 'Any character key',
+      linux: 'Any character key',
+    },
+    locations: [
+      'lib/platform-bible-react/src/hooks/listbox-keyboard-navigation.hook.ts',
+      'extensions/src/platform-lexical-tools/src/web-views/dictionary.component.tsx',
+    ],
+  },
+  {
+    id: 'comment-list-collapse-thread',
+    purpose: 'Collapse the comment thread last interacted with, and clear the selected thread',
+    category: 'Widget navigation',
+    context: 'Comment list (anywhere in the list, including inside a thread’s controls)',
+    keys: { macOS: '⎋', windows: 'Esc', linux: 'Esc' },
+    locations: [
+      'lib/platform-bible-react/src/components/advanced/comment-list/comment-list.component.tsx',
+    ],
+    conflicts: [
+      {
+        id: 'listbox-enter-option',
+        note: 'The comment list handles Escape before the listbox hook sees it, so in the comment list Escape collapses the thread and the hook’s Escape back to the option never runs.',
+      },
+    ],
+  },
+  {
+    id: 'source-language-list-close-detail',
+    purpose: 'Close the detail panel and return to the list',
+    category: 'Widget navigation',
+    context: 'Source-language indexed list, detail panel open',
+    keys: { macOS: '⎋', windows: 'Esc', linux: 'Esc' },
+    locations: [
+      'lib/platform-bible-react/src/components/advanced/source-language-indexed-list/source-language-indexed-list.component.tsx',
+    ],
+  },
+  {
+    id: 'table-keyboard-navigation',
+    purpose:
+      'Move from the table into its first row (↓), between rows (↑/↓) and between controls in a row (←/→); Escape goes back from a control to its row, and from a row to the table',
+    category: 'Widget navigation',
+    context:
+      'Tables built on the shared Table component (inventories, Scripture results, the resource picker, data tables)',
+    keys: {
+      macOS: '↑ / ↓ / ← / → / ⎋',
+      windows: '↑ / ↓ / ← / → / Esc',
+      linux: '↑ / ↓ / ← / → / Esc',
+    },
+    locations: ['lib/platform-bible-react/src/components/shadcn-ui/table.tsx'],
+  },
+  {
+    id: 'semantic-domain-tree-navigation',
+    purpose:
+      'Move through the semantic-domain tree (↑/↓, Tab/Shift+Tab, Home/End), expand or step into a domain (→), collapse or go to its parent (←), and close the tree (Escape)',
+    category: 'Widget navigation',
+    context: 'Semantic domain viewer, a breadcrumb segment’s domain tree open',
+    // Tab and Escape stop at the tree so the surrounding dialog does not also move focus or close.
+    keys: {
+      macOS: '↑ / ↓ / ← / → / ↖ / ↘ / ⇥ / ⇧⇥ / ⎋',
+      windows: '↑ / ↓ / ← / → / Home / End / Tab / Shift+Tab / Esc',
+      linux: '↑ / ↓ / ← / → / Home / End / Tab / Shift+Tab / Esc',
+    },
+    locations: [
+      'extensions/src/platform-enhanced-resources/src/components/semantic-domain-viewer/er-dictionary-filtered-list.component.tsx',
+    ],
+  },
+  {
+    id: 'semantic-domain-entry-list-navigation',
+    purpose:
+      'Move between dictionary entries (↑/↓). In a wide layout the moved-to entry is selected at once; in a narrow one Enter or Space selects it',
+    category: 'Widget navigation',
+    context: 'Semantic domain viewer, entry list focused',
+    keys: {
+      macOS: '↑ / ↓ / ⏎ / ␣',
+      windows: '↑ / ↓ / Enter / Space',
+      linux: '↑ / ↓ / Enter / Space',
+    },
+    locations: [
+      'extensions/src/platform-enhanced-resources/src/components/semantic-domain-viewer/er-dictionary-filtered-list.component.tsx',
+    ],
+  },
+  {
+    id: 'footnote-caller-dropdown-navigation',
+    purpose:
+      'Move between the caller type list and the custom caller field (→ or ↓ into the field, ↑ or ← at its start back out); Enter closes the dropdown with the custom caller',
+    category: 'Widget navigation',
+    context: 'Footnote editor, caller dropdown open',
+    keys: {
+      macOS: '→ / ↓ / ↑ / ← / ⏎',
+      windows: '→ / ↓ / ↑ / ← / Enter',
+      linux: '→ / ↓ / ↑ / ← / Enter',
+    },
+    locations: [
+      'lib/platform-bible-react/src/components/advanced/footnote-editor/footnote-caller-dropdown.component.tsx',
+    ],
+  },
+];
+
+/**
+ * Paratext 9 shortcuts that have no counterpart in {@link rootKeyboardShortcuts}, taken from the
+ * Paratext 9 feature research in `.context/research/paratext-9-features/`. Paratext 9 ran on
+ * Windows and Linux only, so each chord is written the Windows way. Record only what that research
+ * states; when a shortcut here gains a Platform.Bible counterpart, move it to that entry's
+ * `paratext9`.
+ */
+export const paratext9OnlyShortcuts: Paratext9OnlyShortcut[] = [
+  {
+    id: 'pt9-replace',
+    purpose: 'Open Find/Replace on its Replace tab',
+    keys: 'Ctrl+H',
+    note: 'Paratext 9’s ≡ Tab > Edit > Replace.',
+    source:
+      '.context/research/paratext-9-features/01_Translation_Workspace.md § 1.7 Find and Replace',
+  },
+  {
+    id: 'pt9-quick-reference',
+    purpose: 'Open the Quick reference window',
+    keys: 'Ctrl+Q',
+    note: 'Paratext 9’s ≡ Tab > Tools > Quick reference, enabled only for Scripture projects.',
+    source:
+      '.context/research/paratext-9-features/01_Translation_Workspace.md § 1.8 Quick Reference Window',
+  },
+  {
+    id: 'pt9-quick-reference-results',
+    purpose: 'Show the previous or next result in the Quick reference window',
+    keys: 'Alt+↑ / Alt+↓',
+    note: 'In a Results list with View > Quick reference mode turned on.',
+    source:
+      '.context/research/paratext-9-features/01_Translation_Workspace.md § 1.8 Quick Reference Window',
+  },
+  {
+    id: 'pt9-send-receive-projects',
+    purpose: 'Open Send/Receive projects',
+    keys: 'Ctrl+Shift+S',
+    note: 'Paratext 9’s Paratext > Send/Receive projects. Its Project > Send/Receive this project had no shortcut.',
+    source: '.context/research/paratext-9-features/10_Collaboration_Sync.md § 10.1 Send/Receive',
+  },
+  {
+    id: 'pt9-biblical-terms',
+    purpose: 'Open the Biblical Terms tool',
+    keys: 'Ctrl+Shift+B',
+    note: 'Paratext 9’s Tools > Biblical Terms.',
+    source: '.context/research/paratext-9-features/04_Biblical_Terms.md § 4.1 Biblical Terms Tool',
+  },
+  {
+    id: 'pt9-add-rendering',
+    purpose: 'Add the selected text as a rendering of the Biblical term',
+    keys: 'Ctrl+A',
+    note: 'In the Biblical Terms tool. In text here, Ctrl+A (⌘A) selects all instead.',
+    source: '.context/research/paratext-9-features/04_Biblical_Terms.md § 4.3 Guessed Renderings',
+  },
+  {
+    id: 'pt9-reload-bible-module',
+    purpose: 'Reload the Bible module shown in the text window',
+    keys: 'F5',
+    note: 'Paratext 9’s ≡ Tab > View > Reload Bible module, available while a Bible module is open.',
+    source:
+      '.context/research/paratext-9-features/15_Publishing_Output.md § 15.12 Bible Module Export',
+  },
+  {
+    id: 'pt9-save-all',
+    purpose: 'Save all',
+    keys: 'Ctrl+S',
+    note: 'Paratext 9’s Paratext > Save all. No Save chord is catalogued here.',
+    source:
+      '.context/research/paratext-9-features/11_Project_Planning.md § 11.1 Assignments and Progress',
+  },
+  {
+    id: 'pt9-context-help',
+    purpose: 'Open help for what has focus',
+    keys: 'F1',
+    note: 'Paratext 9’s context-sensitive help.',
+    source: '.context/research/paratext-9-features/16_Infrastructure.md § 16.4 Help System',
   },
 ];

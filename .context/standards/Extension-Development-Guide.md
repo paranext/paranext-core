@@ -355,6 +355,10 @@ The sandbox does not have `allow-forms` permission. Form submissions are blocked
 </div>
 ```
 
+A key handler in a web view — like this Enter-to-submit, or any shortcut chord — needs an entry in the
+keyboard shortcuts catalog (`src/shared/data/keyboard-shortcuts.data.ts`) in the same change; see
+`.claude/rules/keyboard-shortcuts-catalog.md`.
+
 #### Select Component Constraints
 
 The Select component's value prop cannot be an empty string:
