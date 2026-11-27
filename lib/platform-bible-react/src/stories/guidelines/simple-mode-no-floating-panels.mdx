@@ -1,0 +1,102 @@
+import { Meta } from '@storybook/addon-docs/blocks';
+import LinkTo from '@storybook/addon-links/react';
+
+<Meta title="Guidelines/No Floating Panels in Simple Mode" />
+
+# No floating panels in Simple mode
+
+In **Simple** interface mode (`platform.interfaceMode` is `'simple'`), never open a floating panel.
+Anything that would float in Power mode opens as a **full-app dialog** instead — always, with no
+per-feature exceptions.
+
+Power mode is unchanged: floating panels stay available there.
+
+## Why
+
+Simple mode is a fixed three-column layout that the user cannot rearrange. A floating panel breaks
+that promise:
+
+- It sits on top of the columns at an arbitrary size and position, and hides part of the text the
+  user was working on.
+- It can be dragged around but never docked, so it is one more thing to manage — a window inside a
+  window.
+- It is easy to lose behind another floating panel, or to leave open and forget.
+
+A full-app dialog has none of these problems: there is exactly one thing on screen, it is obvious
+how to leave it, and closing it returns the user to the layout exactly as they left it.
+
+## The rule
+
+| In Simple mode, instead of…                                                                 | …use                       |
+| ------------------------------------------------------------------------------------------- | -------------------------- |
+| A web view opened with `{ type: 'float' }`                                                  | A full-app dialog          |
+| A floating Settings, Home, Get Resources, Manage Books, registration, or tool window        | A full-app dialog          |
+| A `papi.dialogs.showDialog` dialog shown as a floating tab (the default without `isModal`)  | A full-app dialog          |
+| The context-menu **Float Tab** action                                                       | Not offered in Simple mode |
+
+### Small modals are exempt
+
+Small modals are a different thing and are **not** affected by this rule: short, centred
+confirmations and alerts — for example `papi.dialogs.showDialog` with `isModal: true`, which renders
+a centred card through the renderer's modal dialog overlay (`OverlayModalDialog`). Keep using them
+for a quick question or a warning. The same goes for popovers, menus, and tooltips; see
+<LinkTo title="Guidelines/Dismissal Patterns">Dismissal Patterns</LinkTo> for those.
+
+If the content is more than a short question — a form, a list, a settings page, a tool — it is not a
+small modal; it is a full-app dialog.
+
+## What a full-app dialog is
+
+- **Covers the app area below the toolbar.** It covers the dock — the columns and everything in
+  them — for as long as it is open. No part of the columns behind it stays visible or reachable.
+- **Leaves the app toolbar visible.** The toolbar stays on screen above the dialog, exactly where it
+  always is. The dialog does not cover the toolbar, and it does not contain its own copy of it — no
+  Scripture reference control, scroll group selector, or main menu inside the dialog. If the dialog
+  needs navigation or actions of its own, it has them, scoped to its task.
+- **Has a title and an obvious way out.** A visible title says what the dialog is for, and a close
+  button (or a Cancel / Done button, per
+  <LinkTo title="Guidelines/Applying Changes">Applying Changes</LinkTo>) returns the user to the
+  layout. Escape closes it unless it holds unsaved input (see Explicit dismissal in
+  <LinkTo title="Guidelines/Dismissal Patterns">Dismissal Patterns</LinkTo>).
+- **Is modal.** While it is open, the layout behind it does not take input.
+- **Is responsive, not fixed-size.** Lay the content out for the space below the toolbar; do not
+  hard-code the `floatSize` the Power-mode version uses. See
+  <LinkTo title="Guidelines/Responsiveness">Responsiveness</LinkTo>.
+
+## How to build one today
+
+As of 2026-11, an extension **cannot** open a full-app dialog yet. What exists:
+
+- **Web view layouts** — `openWebView` takes a `tab`, `panel`, or `float` layout
+  (`Layout` in `src/shared/models/docking-framework.model.ts`). There is no full-app layout.
+- **`papi.overlays`** (`IOverlayService` in `src/renderer/services/overlays/overlay.service-model.ts`)
+  — available to web views through `@papi/frontend`. It hosts overlays above the iframes on a web
+  view's behalf, but only context menus, tab menus, popovers, and command palettes. It cannot host a web view
+  or arbitrary content.
+- **`papi.dialogs.showDialog(type, { isModal: true })`** — renders through the same overlay store
+  (`showModalDialogOverlay` in `overlay.service-host.ts`, an internal function), but only for the
+  core dialog types registered in `DIALOGS` (`src/renderer/components/dialogs/index.ts`), and only
+  as a small centred card — a small modal, not a full-app dialog.
+- **Renderer (core) covers** — the workspace-updating cover (`WorkspaceUpdatingOverlay` in
+  `src/renderer/components/overlays/overlay-workspace-updating.component.tsx`) is the one existing
+  surface with the right geometry: a `Dialog` whose `DialogContent` is overridden into an opaque
+  layer that starts at `getDockTop` (`src/renderer/components/toolbar-height.util.ts`), so it covers
+  the dock and leaves the toolbar visible. It applies `CANCEL_ENTER_ZOOM_STYLE`
+  (`overlays/full-screen-dialog.util.ts`) and registers with `useWindowBlockingOverlay`. A core
+  full-app dialog built in the renderer should copy that geometry, taking its z-index from a named
+  tier in `z-index.ts` rather than arithmetic on one.
+
+What is missing for extensions: a way to ask for a web view (or registered dialog) to be shown as a
+dock-covering overlay. That needs either a new layout type next to `FloatLayout` in
+`docking-framework.model.ts`, handled where web views are placed (`web-view.service-shard.ts`), or a
+new full-app entry type in the overlay service (`OverlayEntry` and `IOverlayService`) that the
+renderer's `OverlayHost` (`src/renderer/components/overlay-host.component.tsx`) renders at
+`getDockTop`. Until one exists, do not open a `float` in Simple
+mode: read `platform.interfaceMode`, and raise the need with the UX and platform teams rather than
+shipping a floating panel or building a one-off.
+
+Treat an interface mode that cannot be read as Simple: a floating panel shown to a Simple-mode user
+is the failure this rule exists to prevent.
+
+See also: <LinkTo title="Guidelines/Interactions">Interactions</LinkTo> — tab layout and floating in
+Power mode; <LinkTo title="Guidelines/Design Principles">Design Principles</LinkTo>.

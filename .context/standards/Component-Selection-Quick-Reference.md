@@ -306,6 +306,8 @@ Run `npm run storybook` and see:
 - **Guidelines/Application Interactions** - Standard interaction patterns
 - **Guidelines/Applying Changes** - How changes take effect (immediate vs. explicit apply), error handling, feedback, button microcopy
 - **Guidelines/Vocabulary** - UI terminology standards
+- **Guidelines/No Floating Panels in Simple Mode** - In Simple mode, anything that would float opens as a full-app dialog below the app toolbar, which stays visible
+- **Guidelines/Subtexts** - Keep subtexts short or leave them out; prefer better labels, defaults, and progressive disclosure
 
 ## Design Resources
 
