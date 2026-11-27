@@ -19,7 +19,7 @@ tabs are labelled.
 | -------------------- | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
 | **Paratext menu**    | The app's main menu, opened from the Paratext logo on the application title bar | App-wide entries only: ways to get or open a project (or several projects), global settings, and similar app-level actions |
 | **Tab menu**         | A hamburger (`Menu` icon) dropdown at the start of the tab toolbar             | Entries about this tab and its content, in groups                                                                |
-| **View menu**        | An eye (`Eye` icon) dropdown on the end side of the tab toolbar                | Options for how this tab displays its content                                                                    |
+| **View menu**        | A vertical ellipsis (`EllipsisVertical` icon) dropdown on the end side of the tab toolbar | Options for how this tab displays its content                                                                    |
 
 - **Nothing tab-specific goes in the Paratext menu.** If an entry acts on the current tab, its
   project or resource, or its selection, it belongs on the tab.
@@ -37,8 +37,8 @@ The tab menu of a project or resource tab uses these groups, **in this order**:
 
 ### The View group is not in the tab menu
 
-View options do not go in the hamburger menu. They go in the eye-icon dropdown on the end side of
-the tab toolbar, in both Simple and Power mode.
+View options do not go in the hamburger menu. They go in the vertical-ellipsis (⋮) dropdown on the end
+side of the tab toolbar, in both Simple and Power mode.
 
 ## For extension authors
 
@@ -53,7 +53,7 @@ the hamburger dropdown.
 | Get or open a project or resource, an app-wide setting, an app action | `mainMenu`, in a group of the `platform.app` column — `platform.projectProjects`, `platform.projectResources`, `platform.projectSettings` or `platform.projectMisc` (defined in `src/extension-host/data/menu.data.json`) |
 | Something about one project or resource tab as a whole             | The first column of that tab's `topMenu` (under `webViewMenus` for your web view type). With `includeDefaults: true` that is the core column `platform.app` from `defaultWebViewTopMenu`, with its groups `platform.projectTop`, `platform.manageBooks`, `platform.deleteProject` and `platform.projectDetails` |
 | Edit, Insert, Tools                                                | The matching column of that tab's `topMenu`, ordered after the first column as listed above                                                                     |
-| A view option (layout, zoom, what is shown)                        | Not in `topMenu`. It belongs in the eye-icon View menu, which does not exist yet — see Current state                                                           |
+| A view option (layout, zoom, what is shown)                        | Not in `topMenu`. It belongs in the ⋮ View menu, which does not exist yet — see Current state                                                           |
 
 Hide an entry that only makes sense in one interface mode with `hiddenInterfaceModes`, and hide an
 entry a resource cannot use (for example in Insert) with a `when` expression on
@@ -74,9 +74,9 @@ The app does not follow this rule everywhere yet. Known gaps:
   (`platformScriptureEditor.options`, holding colors, layout, zoom and footnotes pane), ordered
   between Edit and Insert. The Markers Checklist (`platformScripture.markersChecklist`) has a View
   column (`platformScripture.markersChecklistView`) too.
-- **There is no eye-icon View menu.** `TabToolbar`
+- **There is no View menu yet.** `TabToolbar`
   (`lib/platform-bible-react/src/components/advanced/tab-toolbar/tab-toolbar.component.tsx`) has a
-  `tabViewMenuData` slot on its end side, but it uses the `EllipsisVertical` icon, and no caller
+  `tabViewMenuData` slot on its end side with the right `EllipsisVertical` icon, but no caller
   passes it (`web-view.component.tsx` and the Scripture editor's web view pass only
   `projectMenuData`). `menus.json` has no place to contribute a view menu: `WebViewMenu` holds
   `topMenu`, `contextMenu` and `tabMenu` only.

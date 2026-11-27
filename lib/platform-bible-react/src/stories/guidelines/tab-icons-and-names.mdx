@@ -25,16 +25,17 @@ Icons are [Lucide](https://lucide.dev/icons/) icons, set by name with the web vi
 | --------------- | --------------------------------------------------------- |
 | Project         | To be decided by UX                                       |
 | Resource        | [`book-open`](https://lucide.dev/icons/book-open)         |
-| Commentary      | [`file-text`](https://lucide.dev/icons/file-text)         |
+| Commentary      | [`book-marked`](https://lucide.dev/icons/book-marked)     |
 | Find            | [`search`](https://lucide.dev/icons/search)               |
 | Dictionary      | [`book-a`](https://lucide.dev/icons/book-a)               |
 | Comments        | [`message-square`](https://lucide.dev/icons/message-square) |
-| Checks          | [`clipboard-check`](https://lucide.dev/icons/clipboard-check) |
+| Checks          | [`circle-check`](https://lucide.dev/icons/circle-check)   |
 | Text Collection | [`library`](https://lucide.dev/icons/library)             |
 | Any other tool  | To be decided by UX                                       |
 
-The table records the icons the app uses today. Do not pick a new icon for a content type that is
-not listed or is marked "to be decided by UX" — ask UX.
+The table records UX's decisions as of 2026-11-27; they match the icon catalog's decided icons
+(Reference → Icons in the core Storybook). Do not pick a new icon for a content type that is not
+listed or is marked "to be decided by UX" — ask UX.
 
 ## Names in Power mode
 
@@ -89,9 +90,13 @@ Where the app does not follow this page yet:
   `checks-side-panel.web-view-provider.ts`, and `createResourceTextPanelProvider` in
   `extensions/src/platform-scripture-editor/src/main.ts`); in Power mode they show the app logo.
   Comments, Dictionary, Text Collection and resource editor tabs show their icon in both modes.
-- **A commentary opened in the Scripture editor gets the resource icon.** `getEditorTabIconName`
-  gives every published resource `book-open` and does not tell commentaries apart, while the
-  Commentaries panel uses `file-text`.
+- **Commentaries use the wrong icon.** `getEditorTabIconName` gives every published resource
+  `book-open` and does not tell commentaries apart, and the Commentaries panel uses `file-text`;
+  both should be `book-marked`.
+- **Checks use the wrong icon.** The Checks side panel uses `clipboard-check`; it should be
+  `circle-check`, which is not yet registered in `LUCIDE_ICONS_BY_NAME`
+  (`lib/platform-bible-react/src/components/basics/lucide-icons.util.ts`), so a web view cannot name
+  it until it is added there.
 - **Many tool tabs show the app logo**: the inventories, Markers Checklist, Configure Checks, Manage
   books, the enhanced resource and the Model text panel set no icon.
 
